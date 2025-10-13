@@ -1,3 +1,6 @@
 fastapi==0.115.12
 pydantic-settings==2.8.1
 uvicorn==0.34.1
+asyncpg==0.30.0
+tortoise-orm==0.25.0
+aerich[toml]==0.8.2
