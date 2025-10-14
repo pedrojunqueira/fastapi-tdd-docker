@@ -18,6 +18,10 @@ fastapi-tdd-docker/
 │   │   └── create.sql        # Database initialization
 │   ├── migrations/           # Database migration files
 │   │   └── models/          # Generated migration scripts
+│   ├── tests/               # Test files
+│   │   ├── __init__.py
+│   │   ├── conftest.py      # Pytest configuration and fixtures
+│   │   └── test_ping.py     # Example test file
 │   └── app/                 # FastAPI application
 │       ├── __init__.py
 │       ├── main.py          # Main application file
@@ -35,6 +39,7 @@ fastapi-tdd-docker/
 - **PostgreSQL**: Robust relational database with async support
 - **Tortoise ORM**: Async ORM inspired by Django ORM for FastAPI
 - **Database Migrations**: Automated schema management with Aerich
+- **Testing**: Pytest with test fixtures and separate test database
 - **Docker**: Containerized application for consistent development and deployment
 - **Docker Compose**: Multi-container orchestration for local development
 - **Environment Configuration**: Configurable settings using Pydantic Settings
@@ -47,6 +52,7 @@ fastapi-tdd-docker/
 - **Database**: PostgreSQL 17
 - **ORM**: Tortoise ORM with async support
 - **Migration Tool**: Aerich
+- **Testing**: Pytest with HTTPX test client
 - **Containerization**: Docker & Docker Compose
 - **Database Driver**: asyncpg
 
@@ -375,17 +381,85 @@ docker-compose exec -T web-db pg_restore -U postgres -d web_dev backup.dump
 
 ## Testing
 
-The project structure is set up to support Test-Driven Development with separate test database configuration. You can add tests in a `tests/` directory and run them inside the container:
+The project is set up for Test-Driven Development with pytest, including test fixtures and a separate test database configuration.
+
+### Test Structure
+
+- `tests/conftest.py`: Pytest configuration and shared fixtures
+- `tests/test_ping.py`: Example test for the ping endpoint
+- Separate test database (`web_test`) for isolated testing
+
+### Basic Test Commands
 
 ```bash
-# Execute tests (when test files are added)
+# Run all tests
 docker-compose exec web python -m pytest
 
-# Run tests with coverage
-docker-compose exec web python -m pytest --cov=app
+# Run tests with verbose output
+docker-compose exec web python -m pytest -v
+
+# Run tests with output capture disabled (see print statements)
+docker-compose exec web python -m pytest -s
 
 # Run specific test file
-docker-compose exec web python -m pytest tests/test_example.py
+docker-compose exec web python -m pytest tests/test_ping.py
+
+# Run specific test function
+docker-compose exec web python -m pytest tests/test_ping.py::test_ping
+
+# Run tests matching a pattern
+docker-compose exec web python -m pytest -k "ping"
+```
+
+### Advanced Test Commands
+
+```bash
+# Run tests with coverage report
+docker-compose exec web python -m pytest --cov=app
+
+# Generate HTML coverage report
+docker-compose exec web python -m pytest --cov=app --cov-report=html
+
+# Run tests with coverage and show missing lines
+docker-compose exec web python -m pytest --cov=app --cov-report=term-missing
+
+# Run tests and stop on first failure
+docker-compose exec web python -m pytest -x
+
+# Run tests in parallel (if pytest-xdist is installed)
+docker-compose exec web python -m pytest -n auto
+
+# Run only failed tests from last run
+docker-compose exec web python -m pytest --lf
+
+# Show test durations (slowest tests first)
+docker-compose exec web python -m pytest --durations=10
+```
+
+### Test Database Management
+
+```bash
+# The test database (web_test) is automatically used during testing
+# You can connect to it directly if needed:
+docker-compose exec web-db psql -U postgres -d web_test
+
+# Reset test database (if needed)
+docker-compose exec web-db psql -U postgres -c "DROP DATABASE IF EXISTS web_test; CREATE DATABASE web_test;"
+```
+
+### Writing Tests
+
+Tests use the TestClient from Starlette with dependency overrides for configuration:
+
+```python
+def test_ping(test_app):
+    response = test_app.get("/ping")
+    assert response.status_code == 200
+    assert response.json() == {
+        "ping": "pong!",
+        "environment": "dev",
+        "testing": True
+    }
 ```
 
 The `DATABASE_TEST_URL` environment variable ensures tests use a separate database (`web_test`) to avoid conflicts with development data.
