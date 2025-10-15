@@ -27,8 +27,14 @@ fastapi-tdd-docker/
 │       ├── main.py          # Main application file
 │       ├── config.py        # Configuration settings
 │       ├── db.py            # Tortoise ORM configuration
-│       └── models/          # Database models
+│       ├── api/             # API routes and endpoints
+│       │   ├── __init__.py
+│       │   ├── ping.py      # Health check endpoint
+│       │   ├── summaries.py # Summaries CRUD endpoints
+│       │   └── crud.py      # Database operations
+│       └── models/          # Data models
 │           ├── __init__.py
+│           ├── pydantic.py  # Pydantic schemas for API
 │           └── tortoise.py  # Tortoise ORM models
 └── README.md                # This file
 ```
@@ -36,8 +42,11 @@ fastapi-tdd-docker/
 ## Features
 
 - **FastAPI**: Modern, fast web framework for building APIs with Python
+- **Modular API Structure**: Organized with APIRouter for scalable endpoint management
+- **CRUD Operations**: Full Create, Read, Update, Delete operations for summaries
 - **PostgreSQL**: Robust relational database with async support
 - **Tortoise ORM**: Async ORM inspired by Django ORM for FastAPI
+- **Pydantic Schemas**: Type validation and serialization for API requests/responses
 - **Database Migrations**: Automated schema management with Aerich
 - **Testing**: Pytest with test fixtures and separate test database
 - **Docker**: Containerized application for consistent development and deployment
@@ -55,6 +64,31 @@ fastapi-tdd-docker/
 - **Testing**: Pytest with HTTPX test client
 - **Containerization**: Docker & Docker Compose
 - **Database Driver**: asyncpg
+
+## Application Architecture
+
+### Modular Structure
+
+The application follows a modular architecture pattern:
+
+- **`app/main.py`**: Application factory and router registration
+- **`app/api/`**: API layer with organized routers
+  - `ping.py`: Health check endpoints
+  - `summaries.py`: Summaries CRUD endpoints
+  - `crud.py`: Database operations and business logic
+- **`app/models/`**: Data models and schemas
+  - `tortoise.py`: Database models using Tortoise ORM
+  - `pydantic.py`: API request/response schemas
+- **`app/config.py`**: Application configuration management
+- **`app/db.py`**: Database connection and initialization
+
+### Data Flow
+
+1. **API Request** → FastAPI Router (`app/api/summaries.py`)
+2. **Validation** → Pydantic Schema (`app/models/pydantic.py`)
+3. **Business Logic** → CRUD Operations (`app/api/crud.py`)
+4. **Data Persistence** → Tortoise ORM Models (`app/models/tortoise.py`)
+5. **Database** → PostgreSQL
 
 ## Prerequisites
 
@@ -183,13 +217,38 @@ These can be modified in the `docker-compose.yml` file under the `environment` s
 
 ### Database Models
 
-The project includes a sample `TextSummary` model demonstrating Tortoise ORM usage:
+The project includes models for managing text summaries:
+
+**Tortoise ORM Model** (`app/models/tortoise.py`):
 
 ```python
 class TextSummary(models.Model):
     url = fields.TextField()
     summary = fields.TextField()
     created_at = fields.DatetimeField(auto_now_add=True)
+
+# Auto-generated Pydantic model for API responses
+SummarySchema = pydantic_model_creator(TextSummary)
+```
+
+**Pydantic Schemas** (`app/models/pydantic.py`):
+
+```python
+class SummaryPayloadSchema(BaseModel):
+    url: str
+
+class SummaryResponseSchema(SummaryPayloadSchema):
+    id: int
+```
+
+### API Router Structure
+
+The application uses FastAPI's APIRouter for modular endpoint organization:
+
+```python
+# app/main.py
+app.include_router(ping.router)
+app.include_router(summaries.router, prefix="/summaries", tags=["summaries"])
 ```
 
 ### Hot Reload
@@ -378,6 +437,53 @@ docker-compose exec -T web-db pg_restore -U postgres -d web_dev backup.dump
       "testing": false
     }
     ```
+
+### Summaries
+
+The summaries API provides CRUD operations for managing text summaries.
+
+- **POST** `/summaries/`
+
+  - Create a new summary
+  - Request body:
+    ```json
+    {
+      "url": "https://example.com/article"
+    }
+    ```
+  - Response (201 Created):
+    ```json
+    {
+      "id": 1,
+      "url": "https://example.com/article"
+    }
+    ```
+
+- **GET** `/summaries/{id}/`
+  - Retrieve a specific summary by ID
+  - Response (200 OK):
+    ```json
+    {
+      "id": 1,
+      "url": "https://example.com/article",
+      "summary": "Generated summary text...",
+      "created_at": "2025-10-16T10:30:00Z"
+    }
+    ```
+  - Response (404 Not Found):
+    ```json
+    {
+      "detail": "Summary not found"
+    }
+    ```
+
+### API Documentation
+
+Once the application is running, you can access:
+
+- **Interactive API Documentation (Swagger UI)**: http://localhost:8004/docs
+- **Alternative API Documentation (ReDoc)**: http://localhost:8004/redoc
+- **OpenAPI JSON Schema**: http://localhost:8004/openapi.json
 
 ## Testing
 
