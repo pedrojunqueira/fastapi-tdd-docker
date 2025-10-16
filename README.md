@@ -495,51 +495,82 @@ The project is set up for Test-Driven Development with pytest, including test fi
 - `tests/test_ping.py`: Example test for the ping endpoint
 - Separate test database (`web_test`) for isolated testing
 
-### Basic Test Commands
+### Pytest Commands
+
+#### Basic Test Execution
 
 ```bash
-# Run all tests
-docker-compose exec web python -m pytest
+# Normal run - execute all tests
+docker compose exec web python -m pytest
 
-# Run tests with verbose output
-docker-compose exec web python -m pytest -v
+# Run with verbose output (detailed test names and results)
+docker compose exec web python -m pytest -v
 
-# Run tests with output capture disabled (see print statements)
-docker-compose exec web python -m pytest -s
+# Disable warnings during test execution
+docker compose exec web python -m pytest -p no:warnings
 
-# Run specific test file
-docker-compose exec web python -m pytest tests/test_ping.py
-
-# Run specific test function
-docker-compose exec web python -m pytest tests/test_ping.py::test_ping
-
-# Run tests matching a pattern
-docker-compose exec web python -m pytest -k "ping"
+# Run with output capture disabled (see print statements)
+docker compose exec web python -m pytest -s
 ```
 
-### Advanced Test Commands
+#### Selective Test Execution
+
+```bash
+# Run specific test file
+docker compose exec web python -m pytest tests/test_ping.py
+
+# Run specific test function
+docker compose exec web python -m pytest tests/test_ping.py::test_ping
+
+# Run tests matching a pattern (supports complex expressions)
+docker compose exec web python -m pytest -k "ping"
+docker compose exec web python -m pytest -k "summary and not test_read_summary"
+
+# Run only the last failed tests
+docker compose exec web python -m pytest --lf
+```
+
+#### Failure Handling
+
+```bash
+# Stop the test session after the first failure
+docker compose exec web python -m pytest -x
+
+# Stop the test run after specific number of failures
+docker compose exec web python -m pytest --maxfail=2
+
+# Enter Python debugger (PDB) after first failure then end session
+docker compose exec web python -m pytest -x --pdb
+
+# Show local variables in tracebacks for better debugging
+docker compose exec web python -m pytest -l
+```
+
+#### Performance and Analysis
+
+```bash
+# List the slowest tests (adjust number as needed)
+docker compose exec web python -m pytest --durations=2
+docker compose exec web python -m pytest --durations=10
+
+# Run tests in parallel (if pytest-xdist is installed)
+docker compose exec web python -m pytest -n auto
+```
+
+#### Coverage Reports
 
 ```bash
 # Run tests with coverage report
-docker-compose exec web python -m pytest --cov=app
+docker compose exec web python -m pytest --cov=app
 
 # Generate HTML coverage report
-docker-compose exec web python -m pytest --cov=app --cov-report=html
+docker compose exec web python -m pytest --cov=app --cov-report=html
 
-# Run tests with coverage and show missing lines
-docker-compose exec web python -m pytest --cov=app --cov-report=term-missing
+# Show missing lines in coverage report
+docker compose exec web python -m pytest --cov=app --cov-report=term-missing
 
-# Run tests and stop on first failure
-docker-compose exec web python -m pytest -x
-
-# Run tests in parallel (if pytest-xdist is installed)
-docker-compose exec web python -m pytest -n auto
-
-# Run only failed tests from last run
-docker-compose exec web python -m pytest --lf
-
-# Show test durations (slowest tests first)
-docker-compose exec web python -m pytest --durations=10
+# Combine coverage with other options
+docker compose exec web python -m pytest --cov=app --cov-report=html -v
 ```
 
 ### Test Database Management
