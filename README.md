@@ -92,10 +92,20 @@ The application follows a modular architecture pattern:
 
 ## Prerequisites
 
+### Local Development
+
 Make sure you have the following installed on your system:
 
 - [Docker](https://docs.docker.com/get-docker/) (version 20.10 or higher)
 - [Docker Compose](https://docs.docker.com/compose/install/) (version 2.0 or higher)
+
+### Azure Deployment
+
+For deploying to Azure, you'll also need:
+
+- [Azure CLI](https://docs.microsoft.com/en-us/cli/azure/install-azure-cli)
+- [Azure Developer CLI (azd)](https://docs.microsoft.com/en-us/azure/developer/azure-developer-cli/install-azd)
+- An active Azure subscription
 
 ## Quick Start
 
@@ -601,9 +611,175 @@ def test_ping(test_app):
 
 The `DATABASE_TEST_URL` environment variable ensures tests use a separate database (`web_test`) to avoid conflicts with development data.
 
-## Production Deployment
+## Azure Deployment with azd
 
-For production deployment, consider:
+This project is configured for deployment to Azure using the Azure Developer CLI (azd). The infrastructure is defined using Bicep templates and will create the following Azure resources:
+
+### Azure Resources Created
+
+- **Azure Container Apps**: Hosts both your FastAPI application and PostgreSQL database with auto-scaling
+- **Azure Container Registry**: Stores your Docker images
+- **PostgreSQL Container**: Containerized PostgreSQL database (same as local development)
+- **Azure Key Vault**: Securely stores secrets and configuration
+- **Azure Log Analytics**: Centralized logging and monitoring
+- **Azure Application Insights**: Application performance monitoring
+
+### Infrastructure Files Structure
+
+```
+infra/
+├── main.bicep                    # Main infrastructure template
+├── main.parameters.json          # Environment-specific parameters
+├── abbreviations.json            # Azure resource naming conventions
+├── app/
+│   ├── web.bicep                 # FastAPI Container App configuration
+│   └── database-container.bicep  # PostgreSQL Container App setup
+└── core/
+    ├── host/
+    │   ├── container-apps.bicep  # Container Apps Environment
+    │   └── container-app.bicep   # Individual Container App
+    ├── security/
+    │   └── keyvault.bicep        # Key Vault for secrets
+    └── monitor/
+        └── monitoring.bicep      # Logging and monitoring
+```
+
+### How Azure Developer CLI (azd) Works
+
+1. **`azure.yaml`**: Defines your application and how azd should handle it
+2. **`infra/`**: Contains Bicep templates that define your Azure infrastructure
+3. **Deployment Process**:
+   - azd provisions Azure resources using Bicep
+   - Builds and pushes your Docker images to Azure Container Registry
+   - Deploys both FastAPI and PostgreSQL containers to Azure Container Apps
+
+### Database Architecture: Containerized PostgreSQL
+
+This project uses a **containerized PostgreSQL database** instead of Azure Database for PostgreSQL, providing several advantages:
+
+#### Benefits:
+
+- **Cost Effective**: Significantly cheaper than managed PostgreSQL service
+- **Consistency**: Identical database setup between local development and production
+- **Simplicity**: No complex networking or firewall configuration required
+- **Control**: Full control over PostgreSQL version and configuration
+- **Docker Compatibility**: Uses the same PostgreSQL Docker image as local development
+
+#### How It Works:
+
+1. **Two Container Apps**: Your application runs as two separate container apps:
+   - `web`: Your FastAPI application
+   - `database`: PostgreSQL database container
+2. **Internal Communication**: Containers communicate internally within the Container Apps environment
+3. **Persistent Storage**: Database data persists across container restarts
+4. **Same Credentials**: Uses the same `postgres/postgres` credentials as local development
+
+#### Database URL:
+
+```
+postgresql://postgres:postgres@{database-container-name}:5432/web_production
+```
+
+### Deployment Commands#### First-time Setup
+
+```bash
+# Initialize azd for your project (already done)
+azd init
+
+# Provision Azure resources and deploy application
+azd up
+
+# Set target location to Australia East
+azd env set AZURE_LOCATION australiaeast
+```
+
+#### Development Workflow
+
+```bash
+# Deploy only code changes (faster than full provision)
+azd deploy
+
+# Provision infrastructure changes
+azd provision
+
+# Full deployment (provision + deploy)
+azd up
+
+# View deployed application
+azd show
+
+# View application logs
+azd logs
+
+# Clean up all Azure resources
+azd down
+```
+
+#### Environment Management
+
+```bash
+# Create a new environment (e.g., staging, production)
+azd env new staging
+
+# Switch between environments
+azd env select production
+
+# List all environments
+azd env list
+
+# View current environment variables
+azd env get-values
+```
+
+### Step-by-Step Deployment Guide
+
+1. **Install Prerequisites**:
+
+   ```bash
+   # Install Azure CLI
+   curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
+
+   # Install Azure Developer CLI
+   curl -fsSL https://aka.ms/install-azd.sh | bash
+   ```
+
+2. **Login to Azure**:
+
+   ```bash
+   azd auth login
+   ```
+
+3. **Set your preferred location**:
+
+   ```bash
+   azd env set AZURE_LOCATION australiaeast
+   ```
+
+4. **Deploy to Azure**:
+   ```bash
+   azd up
+   ```
+
+### Environment Configuration
+
+The Azure deployment uses these environment variables:
+
+- `ENVIRONMENT=production`
+- `TESTING=0`
+- `DATABASE_URL`: Automatically configured from Azure PostgreSQL
+- `APPLICATIONINSIGHTS_CONNECTION_STRING`: Auto-configured for monitoring
+
+### Monitoring Your Application
+
+After deployment, you can monitor your application through:
+
+- **Application Insights**: Performance metrics and logs
+- **Container Apps Logs**: Application logs via `azd logs`
+- **Azure Portal**: Full resource management interface
+
+## Production Deployment (Legacy Notes)
+
+For traditional production deployment approaches, consider:
 
 1. Using a production WSGI server configuration
 2. Setting appropriate environment variables

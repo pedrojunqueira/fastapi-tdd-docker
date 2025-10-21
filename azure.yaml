@@ -1,0 +1,23 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Azure/azure-dev/main/schemas/v1.0/azure.yaml.json
+
+name: fastapi-tdd-docker
+metadata:
+  template: fastapi-tdd-docker@0.0.1-beta
+services:
+  web:
+    project: ./project
+    language: python
+    host: containerapp
+    docker:
+      path: ./Dockerfile.prod
+hooks:
+  postprovision:
+    shell: sh
+    run: |
+      echo "Infrastructure provisioned successfully"
+      echo "Database and web services are being deployed..."
+  predeploy:
+    shell: sh
+    run: |
+      echo "Running pre-deployment checks..."
+      echo "Building and pushing container images..."
