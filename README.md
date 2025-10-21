@@ -112,7 +112,7 @@ For deploying to Azure, you'll also need:
 ### 1. Clone the Repository
 
 ```bash
-git clone <repository-url>
+git clone git@github.com:pedrojunqueira/fastapi-tdd-docker.git
 cd fastapi-tdd-docker
 ```
 
