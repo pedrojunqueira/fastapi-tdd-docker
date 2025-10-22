@@ -2,6 +2,18 @@
 
 A FastAPI application with PostgreSQL database, containerized with Docker and orchestrated with Docker Compose, designed for Test-Driven Development (TDD) workflows using Tortoise ORM for async database operations.
 
+## 🚀 Latest Updates
+
+**Azure Deployment Ready**: This project now includes full Azure deployment support using Azure Developer CLI (azd):
+
+- ✅ **One-command deployment** to Azure Container Apps
+- ✅ **Automatic database migrations** in Azure environment
+- ✅ **Cost-effective containerized PostgreSQL** instead of managed database
+- ✅ **Smart entrypoint script** that handles first-time setup and subsequent migrations
+- ✅ **Production-ready** with monitoring and logging
+
+Deploy to Azure in minutes with: `azd up`
+
 ## Project Structure
 
 ```
@@ -48,6 +60,9 @@ fastapi-tdd-docker/
 - **Tortoise ORM**: Async ORM inspired by Django ORM for FastAPI
 - **Pydantic Schemas**: Type validation and serialization for API requests/responses
 - **Database Migrations**: Automated schema management with Aerich
+- **Azure Deployment**: One-command deployment to Azure using Azure Developer CLI (azd)
+- **Automatic Migration Handling**: Smart entrypoint script that automatically applies database migrations in Azure
+- **Containerized Database**: Cost-effective PostgreSQL container deployment in Azure Container Apps
 - **Testing**: Pytest with test fixtures and separate test database
 - **Docker**: Containerized application for consistent development and deployment
 - **Docker Compose**: Multi-container orchestration for local development
@@ -652,6 +667,7 @@ infra/
    - azd provisions Azure resources using Bicep
    - Builds and pushes your Docker images to Azure Container Registry
    - Deploys both FastAPI and PostgreSQL containers to Azure Container Apps
+   - Automatically handles database migrations via the updated entrypoint script
 
 ### Database Architecture: Containerized PostgreSQL
 
@@ -680,17 +696,51 @@ This project uses a **containerized PostgreSQL database** instead of Azure Datab
 postgresql://postgres:postgres@{database-container-name}:5432/web_production
 ```
 
-### Deployment Commands#### First-time Setup
+### Database Migrations in Azure
+
+The application automatically handles database migrations during deployment:
+
+#### Migration Strategy:
+
+- **First-time Deployment**: When deploying to a fresh Azure environment, the `entrypoint.sh` script automatically runs `aerich upgrade` to apply all existing migrations
+- **Subsequent Deployments**: New migrations are automatically applied during container startup
+- **Migration Files**: All migration files in `migrations/models/` are included in the Docker image
+
+#### How It Works:
+
+1. Container starts and waits for PostgreSQL database to be ready
+2. In production environment (`ENVIRONMENT=production`), the script runs:
+   ```bash
+   aerich upgrade
+   ```
+3. This applies all migrations from the `migrations/models/` directory to the Azure PostgreSQL database
+4. Application starts normally after migrations complete
+
+#### Migration Logs:
+
+You can monitor migration execution in the container logs:
+
+```bash
+azd logs
+# Look for: "Running database migrations..." and "Success upgrading to..."
+```
+
+### Deployment Commands
+
+#### First-time Setup
 
 ```bash
 # Initialize azd for your project (already done)
 azd init
 
+# Login to Azure
+azd auth login
+
+# Set target location to Australia East (optional)
+azd env set AZURE_LOCATION australiaeast
+
 # Provision Azure resources and deploy application
 azd up
-
-# Set target location to Australia East
-azd env set AZURE_LOCATION australiaeast
 ```
 
 #### Development Workflow
@@ -708,7 +758,7 @@ azd up
 # View deployed application
 azd show
 
-# View application logs
+# View application logs (including migration logs)
 azd logs
 
 # Clean up all Azure resources
@@ -736,11 +786,11 @@ azd env get-values
 1. **Install Prerequisites**:
 
    ```bash
-   # Install Azure CLI
-   curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
+   # Install Azure CLI (macOS)
+   brew install azure-cli
 
-   # Install Azure Developer CLI
-   curl -fsSL https://aka.ms/install-azd.sh | bash
+   # Install Azure Developer CLI (macOS)
+   brew tap azure/azd && brew install azd
    ```
 
 2. **Login to Azure**:
@@ -749,16 +799,36 @@ azd env get-values
    azd auth login
    ```
 
-3. **Set your preferred location**:
+3. **Deploy to Azure**:
 
    ```bash
-   azd env set AZURE_LOCATION australiaeast
-   ```
-
-4. **Deploy to Azure**:
-   ```bash
+   # Full deployment (first time)
    azd up
+
+   # Or step by step:
+   azd provision  # Create Azure resources
+   azd deploy     # Deploy application
    ```
+
+### Testing Your Deployment
+
+After deployment, test your API endpoints:
+
+```bash
+# Get the application URL
+azd show
+
+# Test health endpoint
+curl https://your-app-url.azurecontainerapps.io/ping
+
+# Test summaries API
+curl https://your-app-url.azurecontainerapps.io/summaries/
+
+# Create a new summary
+curl -X POST https://your-app-url.azurecontainerapps.io/summaries/ \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://example.com/article"}'
+```
 
 ### Environment Configuration
 
@@ -766,15 +836,15 @@ The Azure deployment uses these environment variables:
 
 - `ENVIRONMENT=production`
 - `TESTING=0`
-- `DATABASE_URL`: Automatically configured from Azure PostgreSQL
+- `DATABASE_URL`: Automatically configured to point to the PostgreSQL container
 - `APPLICATIONINSIGHTS_CONNECTION_STRING`: Auto-configured for monitoring
 
 ### Monitoring Your Application
 
 After deployment, you can monitor your application through:
 
+- **Container Apps Logs**: View via `azd logs` or Azure Portal
 - **Application Insights**: Performance metrics and logs
-- **Container Apps Logs**: Application logs via `azd logs`
 - **Azure Portal**: Full resource management interface
 
 ## Production Deployment (Legacy Notes)
@@ -790,7 +860,9 @@ For traditional production deployment approaches, consider:
 
 ## Troubleshooting
 
-### Container Won't Start
+### Local Development Issues
+
+#### Container Won't Start
 
 1. Check if port 8004 is already in use:
 
@@ -804,7 +876,7 @@ For traditional production deployment approaches, consider:
    docker-compose logs web-db
    ```
 
-### Database Connection Issues
+#### Database Connection Issues
 
 1. Ensure PostgreSQL is running:
 
@@ -823,7 +895,7 @@ For traditional production deployment approaches, consider:
    docker-compose exec web-db pg_isready -U postgres
    ```
 
-### Migration Issues
+#### Migration Issues
 
 1. Reset migrations (⚠️ **This will delete all data**):
 
@@ -836,7 +908,7 @@ For traditional production deployment approaches, consider:
    docker-compose exec web aerich history
    ```
 
-### Permission Issues
+#### Permission Issues
 
 If you encounter permission issues with volume mounts:
 
@@ -845,7 +917,7 @@ If you encounter permission issues with volume mounts:
 sudo chown -R $USER:$USER ./project
 ```
 
-### Clean Reset
+#### Clean Reset
 
 To completely reset the environment including database:
 
@@ -854,6 +926,134 @@ To completely reset the environment including database:
 docker-compose down -v --rmi all
 docker-compose up --build
 ```
+
+### Azure Deployment Issues
+
+#### azd Authentication Problems
+
+1. Login to Azure:
+
+   ```bash
+   azd auth login
+   ```
+
+2. Check current subscription:
+
+   ```bash
+   az account show
+   ```
+
+3. Set correct subscription if needed:
+   ```bash
+   az account set --subscription "your-subscription-id"
+   ```
+
+#### Deployment Failures
+
+1. Check azd logs for detailed error information:
+
+   ```bash
+   azd logs
+   ```
+
+2. View specific container logs:
+
+   ```bash
+   az containerapp logs show --name ca-web-{random-id} --resource-group rg-fastapi-azd --follow false --tail 50
+   ```
+
+3. Redeploy with clean state:
+   ```bash
+   azd down  # Remove all resources
+   azd up    # Recreate everything
+   ```
+
+#### Database Migration Issues in Azure
+
+1. Check if migrations ran successfully in container logs:
+
+   ```bash
+   azd logs
+   # Look for: "Running database migrations..." and "Success upgrading to..."
+   ```
+
+2. If migrations failed, check the specific error:
+
+   ```bash
+   az containerapp logs show --name ca-web-{random-id} --resource-group rg-fastapi-azd --follow false | grep -A 10 -B 10 "aerich"
+   ```
+
+3. Force redeploy to retry migrations:
+   ```bash
+   azd deploy
+   ```
+
+#### API Endpoints Not Working
+
+1. Test the health endpoint first:
+
+   ```bash
+   curl https://your-app-url.azurecontainerapps.io/ping
+   ```
+
+2. Check if the database connection is working:
+
+   ```bash
+   curl https://your-app-url.azurecontainerapps.io/summaries/
+   # Should return [] for empty database
+   ```
+
+3. If getting "Internal Server Error", check container logs for Python tracebacks:
+   ```bash
+   azd logs | grep -A 20 "ERROR"
+   ```
+
+#### Container Apps Not Starting
+
+1. Check container app status:
+
+   ```bash
+   az containerapp show --name ca-web-{random-id} --resource-group rg-fastapi-azd --query "properties.runningStatus"
+   ```
+
+2. Check if database container is running:
+
+   ```bash
+   az containerapp show --name ca-db-{random-id} --resource-group rg-fastapi-azd --query "properties.runningStatus"
+   ```
+
+3. Restart containers if needed:
+   ```bash
+   az containerapp revision restart --name ca-web-{random-id} --resource-group rg-fastapi-azd
+   ```
+
+#### Resource Limits or Scaling Issues
+
+1. Check current resource allocation:
+
+   ```bash
+   az containerapp show --name ca-web-{random-id} --resource-group rg-fastapi-azd --query "properties.template.containers[0].resources"
+   ```
+
+2. Update Bicep templates in `infra/` to adjust CPU/memory if needed
+
+#### Networking Issues
+
+1. Verify container apps can communicate:
+
+   ```bash
+   # Check if database container is accessible from web container
+   azd logs | grep "database connection"
+   ```
+
+2. Ensure containers are in the same Container Apps Environment
+
+#### Common Solutions
+
+- **Migrations not running**: Ensure `ENVIRONMENT=production` is set in the container environment
+- **Database connection timeout**: Check if both containers are in the same Container Apps Environment
+- **Image build failures**: Verify Dockerfile.prod and ensure all dependencies are properly specified
+- **Port issues**: Ensure container is exposing port 8000 (not 8004 like local development)
 
 ## Contributing
 
