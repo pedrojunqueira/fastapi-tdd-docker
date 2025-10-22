@@ -50,7 +50,6 @@ module web './app/web.bicep' = {
     containerAppsEnvironmentName: containerApps.outputs.environmentName
     containerRegistryName: containerApps.outputs.registryName
     databaseServiceName: database.outputs.serviceName
-    exists: false
   }
 }
 

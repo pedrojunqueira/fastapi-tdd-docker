@@ -13,9 +13,10 @@ param containerMaxReplicas int = 3
 param secrets array = []
 param env array = []
 param targetPort int = 8000
-param exists bool = false
 param isInternalOnly bool = false
 param volumes array = []
+param transport string = 'http'
+param containerImage string = 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
 
 resource userIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' existing = {
   name: identityName
@@ -43,7 +44,7 @@ resource containerApp 'Microsoft.App/containerApps@2023-05-01' = {
       ingress: targetPort > 0 ? {
         external: !isInternalOnly
         targetPort: targetPort
-        transport: 'http'
+        transport: transport
         allowInsecure: false
       } : null
       registries: [
@@ -57,7 +58,7 @@ resource containerApp 'Microsoft.App/containerApps@2023-05-01' = {
     template: {
       containers: [
         {
-          image: exists ? 'postgres:17' : 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
+          image: containerImage
           name: containerName
           env: env
           resources: {

@@ -23,7 +23,6 @@ module containerApp '../core/host/container-app.bicep' = {
     location: location
     tags: union(tags, { 'azd-service-name': 'database' })
     identityName: dbIdentity.name
-    exists: true  // Use existing PostgreSQL image, not custom build
     containerAppsEnvironmentName: containerAppsEnvironmentName
     containerRegistryName: containerRegistryName
     containerCpuCoreCount: '0.5'
@@ -32,6 +31,7 @@ module containerApp '../core/host/container-app.bicep' = {
     containerMinReplicas: 1
     containerMaxReplicas: 1
     secrets: []
+    containerImage: 'postgres:17'
     env: [
       {
         name: 'POSTGRES_USER'
@@ -47,6 +47,7 @@ module containerApp '../core/host/container-app.bicep' = {
       }
     ]
     targetPort: 5432
+    transport: 'tcp'
     isInternalOnly: true  // Database should not be externally accessible
   }
 }

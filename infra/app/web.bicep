@@ -6,7 +6,6 @@ param identityName string
 param containerAppsEnvironmentName string
 param containerRegistryName string
 param databaseServiceName string
-param exists bool
 
 @description('Port used by the web service')
 param port int = 8000
@@ -26,7 +25,6 @@ module app '../core/host/container-app.bicep' = {
     location: location
     tags: union(tags, { 'azd-service-name': 'web' })
     identityName: webIdentity.name
-    exists: exists
     containerAppsEnvironmentName: containerAppsEnvironmentName
     containerRegistryName: containerRegistryName
     containerCpuCoreCount: '1.0'
@@ -38,7 +36,7 @@ module app '../core/host/container-app.bicep' = {
     env: union([
       {
         name: 'DATABASE_URL'
-        value: 'postgresql://postgres:postgres@${databaseServiceName}:5432/web_production'
+        value: 'postgres://postgres:postgres@${databaseServiceName}:5432/web_production'
       }
       {
         name: 'ENVIRONMENT'
@@ -53,7 +51,7 @@ module app '../core/host/container-app.bicep' = {
         value: string(port)
       }
     ], env)
-    targetPort: exists ? port : 80  // Use port 80 for placeholder, 8000 for your app
+    targetPort: port  // Use the configured port (8000) for FastAPI
   }
 }
 
