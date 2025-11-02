@@ -135,10 +135,21 @@ cd fastapi-tdd-docker
 
 ```bash
 # Build the Docker image and start the application
-docker-compose up --build
+docker-compose up --build -d
 ```
 
-### 3. Access the Application
+### 3. Initialize the Database
+
+After the containers are running, you need to apply database migrations:
+
+```bash
+# Apply database migrations to create tables
+docker-compose exec web aerich upgrade
+```
+
+This creates the necessary database tables for the application to function properly.
+
+### 4. Access the Application
 
 Once the container is running, you can access:
 
@@ -152,6 +163,86 @@ The application consists of two main services:
 
 - **web**: FastAPI application server
 - **web-db**: PostgreSQL database server
+
+## Data Persistence
+
+The application uses Docker volumes to persist PostgreSQL data across container restarts. This ensures your database data survives when you stop and restart containers.
+
+### Volume Configuration
+
+The `web-db` service is configured with a named volume:
+
+```yaml
+services:
+  web-db:
+    # ... other configuration
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
+```
+
+### Why Use Volumes?
+
+- **Data Persistence**: Your database data survives `docker-compose down`
+- **Development Workflow**: No need to recreate test data after restarts
+- **Backup/Restore**: Easy to manage with Docker commands
+
+### Volume Management Commands
+
+```bash
+# List all volumes
+docker volume ls
+
+# Inspect volume details
+docker volume inspect fastapi-tdd-docker_postgres_data
+
+# Create a backup of the volume
+docker run --rm -v fastapi-tdd-docker_postgres_data:/data -v $(pwd):/backup alpine tar czf /backup/postgres_backup.tar.gz -C /data .
+
+# Restore from backup
+docker run --rm -v fastapi-tdd-docker_postgres_data:/data -v $(pwd):/backup alpine tar xzf /backup/postgres_backup.tar.gz -C /data
+
+# Remove volume (WARNING: This deletes all data!)
+docker volume rm fastapi-tdd-docker_postgres_data
+
+# Remove all unused volumes
+docker volume prune
+```
+
+⚠️ **Important**: Removing volumes will permanently delete all database data. Always backup important data before volume operations.
+
+### Starting Fresh (Clean Slate)
+
+If you want to completely reset your development environment and start with a clean database:
+
+```bash
+# Step 1: Stop and remove all containers
+docker-compose down
+
+# Step 2: Remove the PostgreSQL volume (deletes all data)
+docker volume rm fastapi-tdd-docker_postgres_data
+
+# Step 3: Start fresh
+docker-compose up -d
+
+# Step 4: Apply migrations to recreate tables
+docker-compose exec web aerich upgrade
+```
+
+**Alternative one-liner for complete reset:**
+
+```bash
+docker-compose down && docker volume rm fastapi-tdd-docker_postgres_data && docker-compose up -d && docker-compose exec web aerich upgrade
+```
+
+**Use cases for starting fresh:**
+
+- Testing migration scripts
+- Cleaning up development data
+- Resolving database corruption issues
+- Starting with a known clean state
 
 ## Docker Compose Commands
 
