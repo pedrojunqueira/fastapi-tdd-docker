@@ -12,18 +12,6 @@ param location string
 @description('Id of the user or app to assign application roles')
 param principalId string = ''
 
-// Optional parameters to override the default azd resource naming conventions.
-// Add the following to main.parameters.json to set the resource names:
-// {
-//   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
-//   "contentVersion": "1.0.0.0",
-//   "parameters": {
-//     "resourceGroupName": {
-//       "value": "myGroupName"
-//     }
-//   }
-// }
-
 @description('Name of the resource group. Leave empty to let azd generate one.')
 param resourceGroupName string = ''
 

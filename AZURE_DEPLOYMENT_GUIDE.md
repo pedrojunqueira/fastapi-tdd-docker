@@ -24,7 +24,7 @@ Complete Azure infrastructure defined as code using Bicep templates:
 **Application Layer:**
 
 - `app/web.bicep`: Azure Container Apps configuration for your FastAPI app
-- `app/database.bicep`: Azure PostgreSQL Flexible Server setup
+- `database-container.bicep`: Azure PostgreSQL Server setup in container
 
 **Core Infrastructure:**
 
@@ -113,6 +113,9 @@ cd /home/pedro/code/fastapi-tdd-docker
 
 # Set the location to Australia East
 azd env set AZURE_LOCATION australiaeast
+
+# Get List of evironement variables
+azd env get-values
 
 # Deploy everything (first time)
 azd up

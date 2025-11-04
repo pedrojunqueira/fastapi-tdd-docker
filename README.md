@@ -218,6 +218,19 @@ docker volume prune
 If you want to completely reset your development environment and start with a clean database:
 
 ```bash
+# Method 1: Stop containers and remove volumes in one command
+docker-compose down -v
+
+# Step 2: Start fresh
+docker-compose up -d
+
+# Step 3: Apply migrations to recreate tables
+docker-compose exec web aerich upgrade
+```
+
+**Alternative method (manual volume removal):**
+
+```bash
 # Step 1: Stop and remove all containers
 docker-compose down
 
@@ -231,10 +244,10 @@ docker-compose up -d
 docker-compose exec web aerich upgrade
 ```
 
-**Alternative one-liner for complete reset:**
+**One-liner for complete reset:**
 
 ```bash
-docker-compose down && docker volume rm fastapi-tdd-docker_postgres_data && docker-compose up -d && docker-compose exec web aerich upgrade
+docker-compose down -v && docker-compose up -d && docker-compose exec web aerich upgrade
 ```
 
 **Use cases for starting fresh:**
