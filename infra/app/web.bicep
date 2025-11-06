@@ -7,6 +7,10 @@ param containerAppsEnvironmentName string
 param containerRegistryName string
 param databaseServiceName string
 
+@secure()
+@description('PostgreSQL password')
+param postgresPassword string
+
 @description('Port used by the web service')
 param port int = 8000
 
@@ -36,7 +40,7 @@ module app '../core/host/container-app.bicep' = {
     env: union([
       {
         name: 'DATABASE_URL'
-        value: 'postgres://postgres:postgres@${databaseServiceName}:5432/web_production'
+        value: 'postgres://postgres:${postgresPassword}@${databaseServiceName}:5432/web_production'
       }
       {
         name: 'ENVIRONMENT'

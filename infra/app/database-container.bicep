@@ -6,6 +6,10 @@ param identityName string
 param containerAppsEnvironmentName string
 param containerRegistryName string
 
+@secure()
+@description('PostgreSQL password')
+param postgresPassword string
+
 @description('PostgreSQL database name')
 param databaseName string = 'web_production'
 
@@ -39,7 +43,7 @@ module containerApp '../core/host/container-app.bicep' = {
       }
       {
         name: 'POSTGRES_PASSWORD'
-        value: 'postgres'
+        value: postgresPassword
       }
       {
         name: 'POSTGRES_DB'

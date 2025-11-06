@@ -131,7 +131,7 @@ git clone git@github.com:pedrojunqueira/fastapi-tdd-docker.git
 cd fastapi-tdd-docker
 ```
 
-### 2. Build and Start the Application
+### 2. Build and Start the Application Locally
 
 ```bash
 # Build the Docker image and start the application
@@ -739,7 +739,6 @@ This project is configured for deployment to Azure using the Azure Developer CLI
 - **Azure Container Apps**: Hosts both your FastAPI application and PostgreSQL database with auto-scaling
 - **Azure Container Registry**: Stores your Docker images
 - **PostgreSQL Container**: Containerized PostgreSQL database (same as local development)
-- **Azure Key Vault**: Securely stores secrets and configuration
 - **Azure Log Analytics**: Centralized logging and monitoring
 - **Azure Application Insights**: Application performance monitoring
 
@@ -757,8 +756,6 @@ infra/
     ├── host/
     │   ├── container-apps.bicep  # Container Apps Environment
     │   └── container-app.bicep   # Individual Container App
-    ├── security/
-    │   └── keyvault.bicep        # Key Vault for secrets
     └── monitor/
         └── monitoring.bicep      # Logging and monitoring
 ```
@@ -792,13 +789,15 @@ This project uses a **containerized PostgreSQL database** instead of Azure Datab
    - `database`: PostgreSQL database container
 2. **Internal Communication**: Containers communicate internally within the Container Apps environment
 3. **Persistent Storage**: Database data persists across container restarts
-4. **Same Credentials**: Uses the same `postgres/postgres` credentials as local development
+4. **Secure Credentials**: Uses generated unique passwords per deployment (not hardcoded credentials)
 
 #### Database URL:
 
 ```
-postgresql://postgres:postgres@{database-container-name}:5432/web_production
+postgresql://postgres:{generated-password}@{database-container-name}:5432/web_production
 ```
+
+**Security Note**: The database password is automatically generated using Azure's `uniqueString()` function based on your subscription ID and environment name, ensuring each deployment has a unique, unpredictable password.
 
 ### Database Migrations in Azure
 
@@ -822,10 +821,18 @@ The application automatically handles database migrations during deployment:
 
 #### Migration Logs:
 
-You can monitor migration execution in the container logs:
+You can monitor migration execution in the container logs using Azure CLI:
 
 ```bash
-azd logs
+# First, find your container app names
+az containerapp list --resource-group rg-fastapi-tdd-dev --output table
+
+# View logs from your web container app (replace with your actual container app name)
+az containerapp logs show --name ca-web-mfhsztqp2zg3m --resource-group rg-fastapi-tdd-dev --follow
+
+# Or get recent logs (last 50 lines)
+az containerapp logs show --name ca-web-mfhsztqp2zg3m --resource-group rg-fastapi-tdd-dev --tail 50
+
 # Look for: "Running database migrations..." and "Success upgrading to..."
 ```
 
@@ -863,7 +870,7 @@ azd up
 azd show
 
 # View application logs (including migration logs)
-azd logs
+az containerapp logs show --name ca-web-mfhsztqp2zg3m --resource-group rg-fastapi-tdd-dev --follow
 
 # Clean up all Azure resources
 azd down
@@ -947,7 +954,7 @@ The Azure deployment uses these environment variables:
 
 After deployment, you can monitor your application through:
 
-- **Container Apps Logs**: View via `azd logs` or Azure Portal
+- **Container Apps Logs**: View via Azure CLI commands or Azure Portal
 - **Application Insights**: Performance metrics and logs
 - **Azure Portal**: Full resource management interface
 
@@ -1054,16 +1061,16 @@ docker-compose up --build
 
 #### Deployment Failures
 
-1. Check azd logs for detailed error information:
+1. Check container logs for detailed error information:
 
    ```bash
-   azd logs
+   az containerapp logs show --name ca-web-mfhsztqp2zg3m --resource-group rg-fastapi-tdd-dev --tail 100
    ```
 
 2. View specific container logs:
 
    ```bash
-   az containerapp logs show --name ca-web-{random-id} --resource-group rg-fastapi-azd --follow false --tail 50
+   az containerapp logs show --name ca-web-mfhsztqp2zg3m --resource-group rg-fastapi-tdd-dev --follow false --tail 50
    ```
 
 3. Redeploy with clean state:
@@ -1077,14 +1084,14 @@ docker-compose up --build
 1. Check if migrations ran successfully in container logs:
 
    ```bash
-   azd logs
+   az containerapp logs show --name ca-web-mfhsztqp2zg3m --resource-group rg-fastapi-tdd-dev --follow
    # Look for: "Running database migrations..." and "Success upgrading to..."
    ```
 
 2. If migrations failed, check the specific error:
 
    ```bash
-   az containerapp logs show --name ca-web-{random-id} --resource-group rg-fastapi-azd --follow false | grep -A 10 -B 10 "aerich"
+   az containerapp logs show --name ca-web-mfhsztqp2zg3m --resource-group rg-fastapi-tdd-dev --follow false | grep -A 10 -B 10 "aerich"
    ```
 
 3. Force redeploy to retry migrations:
@@ -1109,7 +1116,7 @@ docker-compose up --build
 
 3. If getting "Internal Server Error", check container logs for Python tracebacks:
    ```bash
-   azd logs | grep -A 20 "ERROR"
+   az containerapp logs show --name ca-web-mfhsztqp2zg3m --resource-group rg-fastapi-tdd-dev --tail 50 | grep -A 20 "ERROR"
    ```
 
 #### Container Apps Not Starting
@@ -1117,18 +1124,18 @@ docker-compose up --build
 1. Check container app status:
 
    ```bash
-   az containerapp show --name ca-web-{random-id} --resource-group rg-fastapi-azd --query "properties.runningStatus"
+   az containerapp show --name ca-web-mfhsztqp2zg3m --resource-group rg-fastapi-tdd-dev --query "properties.runningStatus"
    ```
 
 2. Check if database container is running:
 
    ```bash
-   az containerapp show --name ca-db-{random-id} --resource-group rg-fastapi-azd --query "properties.runningStatus"
+   az containerapp show --name ca-db-mfhsztqp2zg3m --resource-group rg-fastapi-tdd-dev --query "properties.runningStatus"
    ```
 
 3. Restart containers if needed:
    ```bash
-   az containerapp revision restart --name ca-web-{random-id} --resource-group rg-fastapi-azd
+   az containerapp revision restart --name ca-web-mfhsztqp2zg3m --resource-group rg-fastapi-tdd-dev
    ```
 
 #### Resource Limits or Scaling Issues
@@ -1136,7 +1143,7 @@ docker-compose up --build
 1. Check current resource allocation:
 
    ```bash
-   az containerapp show --name ca-web-{random-id} --resource-group rg-fastapi-azd --query "properties.template.containers[0].resources"
+   az containerapp show --name ca-web-mfhsztqp2zg3m --resource-group rg-fastapi-tdd-dev --query "properties.template.containers[0].resources"
    ```
 
 2. Update Bicep templates in `infra/` to adjust CPU/memory if needed
@@ -1147,7 +1154,7 @@ docker-compose up --build
 
    ```bash
    # Check if database container is accessible from web container
-   azd logs | grep "database connection"
+   az containerapp logs show --name ca-web-mfhsztqp2zg3m --resource-group rg-fastapi-tdd-dev --tail 50 | grep "database connection"
    ```
 
 2. Ensure containers are in the same Container Apps Environment
