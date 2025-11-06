@@ -7,3 +7,4 @@ aerich[toml]==0.8.2
 httpx==0.28.1
 pytest==8.3.5
 gunicorn==22.0.0
+pytest-cov==6.1.1

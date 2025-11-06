@@ -616,13 +616,24 @@ Once the application is running, you can access:
 
 ## Testing
 
-The project is set up for Test-Driven Development with pytest, including test fixtures and a separate test database configuration.
+The project is set up for comprehensive Test-Driven Development with pytest, including test fixtures, separate test database configuration, and **code coverage reporting** with interactive HTML reports.
+
+### Key Testing Features
+
+- **pytest**: Modern Python testing framework with fixtures and plugins
+- **Test Database Isolation**: Separate `web_test` database for clean testing
+- **Code Coverage**: Built-in coverage tracking with `pytest-cov` (currently ~90% coverage)
+- **Interactive HTML Reports**: Detailed line-by-line coverage analysis
+- **Async Testing**: Full support for testing async FastAPI endpoints
+- **Test Fixtures**: Reusable test components and database setup
 
 ### Test Structure
 
 - `tests/conftest.py`: Pytest configuration and shared fixtures
 - `tests/test_ping.py`: Example test for the ping endpoint
+- `tests/test_summaries.py`: CRUD operations testing
 - Separate test database (`web_test`) for isolated testing
+- `htmlcov/`: Generated HTML coverage reports (after running coverage)
 
 ### Pytest Commands
 
@@ -688,19 +699,88 @@ docker compose exec web python -m pytest -n auto
 
 #### Coverage Reports
 
+The project includes comprehensive code coverage tracking using `pytest-cov` (coverage.py integration for pytest). Coverage reports help identify untested code and maintain code quality.
+
 ```bash
-# Run tests with coverage report
+# Run tests with basic coverage report in terminal
 docker compose exec web python -m pytest --cov=app
 
+# Generate detailed HTML coverage report (recommended)
+docker compose exec web python -m pytest --cov=app --cov-report=html
+
+# Show missing lines in terminal coverage report
+docker compose exec web python -m pytest --cov=app --cov-report=term-missing
+
+# Generate multiple report formats simultaneously
+docker compose exec web python -m pytest --cov=app --cov-report=html --cov-report=term-missing
+
+# Combine coverage with other pytest options
+docker compose exec web python -m pytest --cov=app --cov-report=html -v -s
+
+# Set minimum coverage threshold (fails if below threshold)
+docker compose exec web python -m pytest --cov=app --cov-fail-under=85
+
+# Include coverage for test files themselves
+docker compose exec web python -m pytest --cov=app --cov=tests --cov-report=html
+```
+
+#### Interactive HTML Coverage Reports
+
+When you run tests with `--cov-report=html`, an interactive HTML report is generated in the `htmlcov/` directory:
+
+```bash
 # Generate HTML coverage report
 docker compose exec web python -m pytest --cov=app --cov-report=html
 
-# Show missing lines in coverage report
-docker compose exec web python -m pytest --cov=app --cov-report=term-missing
-
-# Combine coverage with other options
-docker compose exec web python -m pytest --cov=app --cov-report=html -v
+# View the report (copy to your host system and open in browser)
+# The main report file is: project/htmlcov/index.html
 ```
+
+**HTML Report Features:**
+
+- **Overall Coverage**: Shows total coverage percentage (currently ~90%)
+- **File-by-File Breakdown**: Detailed coverage for each Python file
+- **Line-by-Line Analysis**: Click on any file to see exactly which lines are covered/missed
+- **Interactive Filtering**: Filter files by coverage percentage or name
+- **Missing Coverage Highlights**: Red highlighting shows uncovered lines
+- **Branch Coverage**: Shows if all conditional branches are tested
+
+**Accessing HTML Reports:**
+
+1. After running tests with HTML coverage, the report is saved to `project/htmlcov/index.html`
+2. Copy the entire `htmlcov/` folder to your local machine to view in a browser
+3. Open `index.html` in your web browser for the interactive report
+
+#### Coverage Configuration
+
+The coverage configuration is managed through pytest command-line options. Common configurations:
+
+```bash
+# Focus coverage on specific modules/packages
+docker compose exec web python -m pytest --cov=app.api --cov-report=html
+
+# Exclude specific files or directories from coverage
+docker compose exec web python -m pytest --cov=app --cov-report=html --ignore=tests/
+
+# Include branch coverage (measures if all code paths are tested)
+docker compose exec web python -m pytest --cov=app --cov-branch --cov-report=html
+```
+
+#### Coverage Best Practices
+
+- **Target 80-90% Coverage**: Aim for high coverage but don't obsess over 100%
+- **Focus on Critical Paths**: Ensure business logic and API endpoints are well tested
+- **Review HTML Reports**: Use the interactive HTML reports to identify missed edge cases
+- **Branch Coverage**: Consider using `--cov-branch` for more thorough testing
+- **Exclude Non-Testable Code**: Some code (like `if __name__ == "__main__"`) should be excluded
+
+#### Coverage Files
+
+Coverage generates several files during execution:
+
+- `htmlcov/`: Directory containing interactive HTML reports
+- `.coverage`: Raw coverage data (binary format)
+- Coverage files are typically added to `.gitignore` to avoid committing large reports
 
 ### Test Database Management
 
