@@ -18,11 +18,11 @@ def test_app():
     app = create_application()
     app.dependency_overrides[get_settings] = get_settings_override
     with TestClient(app) as test_client:
-
         # testing
         yield test_client
 
     # tear down
+
 
 @pytest.fixture(scope="module")
 def test_app_with_db():
@@ -37,7 +37,6 @@ def test_app_with_db():
         add_exception_handlers=True,
     )
     with TestClient(app) as test_client:
-
         # testing
         yield test_client
 

@@ -19,6 +19,8 @@ Deploy to Azure in minutes with: `azd up`
 ```
 fastapi-tdd-docker/
 ├── docker-compose.yml          # Docker Compose configuration
+├── scripts/                    # Development and utility scripts
+│   └── lint.sh                # Ruff linting and formatting script
 ├── project/                    # Application source code
 │   ├── Dockerfile             # Docker image definition
 │   ├── pyproject.toml         # Python project configuration and dependencies (UV-based)
@@ -431,12 +433,88 @@ The application is configured with `--reload` flag and volume mounting, so any c
 
 ### Adding Dependencies
 
-1. Add new packages to `project/requirements.txt`
-2. Rebuild the container:
+1. Add new packages to `project/pyproject.toml`
+2. Update the lockfile: `cd project && uv lock`
+3. Rebuild the container:
    ```bash
    docker-compose down
    docker-compose up --build
    ```
+
+### Code Quality with Ruff
+
+This project uses [Ruff](https://docs.astral.sh/ruff/) for fast Python linting and formatting. Ruff is configured in `project/pyproject.toml`.
+
+#### Ruff Configuration
+
+The ruff configuration includes:
+
+- **Linting**: Multiple rule sets including pycodestyle, Pyflakes, pyupgrade, flake8-bugbear, and more
+- **Formatting**: Black-compatible code formatting with 88-character line length
+- **Import Sorting**: Replaces isort functionality with better performance
+- **Type Checking**: Automated import and type annotation improvements
+- **Security**: flake8-bandit rules for security vulnerability detection
+
+#### Using Ruff
+
+**Recommended: Use the provided shell script:**
+
+```bash
+# Quick commands using the provided script
+./scripts/lint.sh check        # Check code quality only
+./scripts/lint.sh fix          # Fix linting issues automatically
+./scripts/lint.sh format       # Format code (like Black)
+./scripts/lint.sh all          # Fix linting + format (recommended for development)
+./scripts/lint.sh diff         # Show what changes would be made (dry run)
+
+# Show help
+./scripts/lint.sh help
+```
+
+**Manual commands (if you prefer direct uv/ruff usage):**
+
+```bash
+# Check code quality (linting)
+docker-compose exec web uv run ruff check app/ tests/
+
+# Check with auto-fix suggestions
+docker-compose exec web uv run ruff check app/ tests/ --fix
+
+# Format code (auto-fix formatting issues)
+docker-compose exec web uv run ruff format app/ tests/
+
+# Show what would be changed without applying
+docker-compose exec web uv run ruff check app/ --diff
+docker-compose exec web uv run ruff format app/ --diff
+
+# Target specific files
+docker-compose exec web uv run ruff check app/main.py
+docker-compose exec web uv run ruff format app/api/
+```
+
+#### Ruff vs Other Tools
+
+Ruff replaces and combines multiple tools:
+
+- **Replaces**: flake8, isort, pyupgrade, autoflake, and parts of black
+- **Performance**: 10-100x faster than traditional Python linters
+- **Compatibility**: Uses the same configuration format and rules as existing tools
+- **Integration**: Built-in VS Code extension support
+
+#### Pre-commit Integration (Optional)
+
+You can also set up ruff to run automatically before commits:
+
+```yaml
+# .pre-commit-config.yaml
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.4
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+```
 
 ### Database Management
 

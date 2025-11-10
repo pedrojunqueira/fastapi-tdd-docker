@@ -9,5 +9,6 @@ class TextSummary(models.Model):
 
     def __str__(self):
         return self.url
-    
+
+
 SummarySchema = pydantic_model_creator(TextSummary)

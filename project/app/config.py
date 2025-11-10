@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     database_url: AnyUrl = None
 
 
-@lru_cache()
+@lru_cache
 def get_settings() -> BaseSettings:
     log.info("Loading config settings from the environment...")
     return Settings()
