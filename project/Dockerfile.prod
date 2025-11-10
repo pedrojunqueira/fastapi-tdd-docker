@@ -1,5 +1,8 @@
 FROM python:3.13.3-slim-bookworm
 
+# Install uv from the official image
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
 RUN mkdir -p /home/app
 
 # create the app user
@@ -10,26 +13,36 @@ ENV APP_HOME=/home/app/web
 RUN mkdir $APP_HOME
 WORKDIR $APP_HOME
 
-ENV PYTHONDONTWRITEBYTECODE 1
-ENV PYTHONUNBUFFERED 1
-ENV ENVIRONMENT prod
-ENV TESTING 0
+# Environment variables
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV ENVIRONMENT=prod
+ENV TESTING=0
+ENV UV_COMPILE_BYTECODE=1
+ENV UV_LINK_MODE=copy
+ENV UV_NO_CACHE=1
 
 RUN apt-get update \
   && apt-get -y install netcat-traditional gcc postgresql \
   && apt-get clean
 
-RUN pip install --upgrade pip
-COPY ./requirements.txt .
-RUN pip install -r requirements.txt
-RUN pip install "uvicorn[standard]==0.34.1"
+# Install dependencies first for better caching
+COPY pyproject.toml uv.lock* ./
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --locked --no-install-project --no-editable
 
+# Copy the project code
 COPY . .
 
+# Install the project itself
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --locked --no-editable
+
+# Fix ownership and permissions
 RUN chown -R app:app $APP_HOME
 RUN chmod +x $APP_HOME/entrypoint.sh
 
 USER app
 
 ENTRYPOINT ["./entrypoint.sh"]
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "app.main:app", "-k", "uvicorn.workers.UvicornWorker"]
+CMD ["uv", "run", "gunicorn", "--bind", "0.0.0.0:8000", "app.main:app", "-k", "uvicorn.workers.UvicornWorker"]

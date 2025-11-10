@@ -1,0 +1,23 @@
+services:
+  web-prod:
+    image: fastapi-prod
+    ports:
+      - "8005:8000"
+    environment:
+      - ENVIRONMENT=production
+      - TESTING=0
+      - DATABASE_URL=postgres://postgres:postgres@web-db-prod:5432/web_prod
+    depends_on:
+      - web-db-prod
+
+  web-db-prod:
+    image: postgres:17
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=web_prod
+    volumes:
+      - postgres_prod_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_prod_data:

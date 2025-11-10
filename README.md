@@ -21,10 +21,10 @@ fastapi-tdd-docker/
 ├── docker-compose.yml          # Docker Compose configuration
 ├── project/                    # Application source code
 │   ├── Dockerfile             # Docker image definition
-│   ├── requirements.txt       # Python dependencies
+│   ├── pyproject.toml         # Python project configuration and dependencies (UV-based)
+│   ├── uv.lock                # Locked dependency versions for reproducible builds
 │   ├── .dockerignore         # Docker ignore patterns
 │   ├── entrypoint.sh         # Container startup script
-│   ├── pyproject.toml        # Aerich migration configuration
 │   ├── db/                   # Database configuration
 │   │   ├── Dockerfile        # PostgreSQL custom image
 │   │   └── create.sql        # Database initialization
@@ -54,6 +54,7 @@ fastapi-tdd-docker/
 ## Features
 
 - **FastAPI**: Modern, fast web framework for building APIs with Python
+- **UV Package Manager**: Ultra-fast Python package installation and dependency resolution (10-100x faster than pip)
 - **Modular API Structure**: Organized with APIRouter for scalable endpoint management
 - **CRUD Operations**: Full Create, Read, Update, Delete operations for summaries
 - **PostgreSQL**: Robust relational database with async support
@@ -63,22 +64,66 @@ fastapi-tdd-docker/
 - **Azure Deployment**: One-command deployment to Azure using Azure Developer CLI (azd)
 - **Automatic Migration Handling**: Smart entrypoint script that automatically applies database migrations in Azure
 - **Containerized Database**: Cost-effective PostgreSQL container deployment in Azure Container Apps
-- **Testing**: Pytest with test fixtures and separate test database
-- **Docker**: Containerized application for consistent development and deployment
+- **Advanced Testing**: Pytest with fixtures, separate test database, and comprehensive code coverage reporting
+- **Docker Optimization**: Multi-layer caching with UV for faster container builds
 - **Docker Compose**: Multi-container orchestration for local development
 - **Environment Configuration**: Configurable settings using Pydantic Settings
 - **Hot Reload**: Automatic code reloading during development
-- **Python 3.13**: Latest Python version with slim base image
+- **Python 3.13**: Latest Python version with slim base image and compiled bytecode optimization
 
 ## Technology Stack
 
 - **Backend**: FastAPI (Python 3.13)
+- **Package Manager**: UV (ultra-fast Python package installer and resolver)
 - **Database**: PostgreSQL 17
 - **ORM**: Tortoise ORM with async support
 - **Migration Tool**: Aerich
-- **Testing**: Pytest with HTTPX test client
+- **Testing**: Pytest with HTTPX test client and pytest-cov for coverage
 - **Containerization**: Docker & Docker Compose
 - **Database Driver**: asyncpg
+
+## UV Package Manager
+
+This project uses [UV](https://docs.astral.sh/uv/) instead of pip for Python package management, providing significant performance improvements:
+
+### Benefits of UV
+
+- **Speed**: 10-100x faster than pip for package installation and dependency resolution
+- **Reliability**: Built in Rust with robust dependency resolution algorithm
+- **Compatibility**: Drop-in replacement for pip with familiar commands
+- **Docker Optimization**: Built-in caching and multi-stage builds support
+- **Lock Files**: Deterministic builds with `uv.lock` files
+
+### UV vs pip Comparison
+
+- **Installation**: UV installs packages ~10x faster than pip
+- **Dependency Resolution**: UV resolves complex dependencies much more efficiently
+- **Docker Builds**: Better layer caching and parallel installation
+- **Lock Files**: Built-in support for reproducible environments
+
+### Project Configuration
+
+Dependencies are managed in `pyproject.toml`:
+
+```toml
+[project]
+dependencies = [
+    "fastapi==0.115.12",
+    "uvicorn[standard]==0.34.1",  # Includes performance extras for production
+    "gunicorn==22.0.0",           # WSGI server for production
+    # ... other dependencies
+]
+
+[project.optional-dependencies]
+test = ["pytest", "pytest-cov"]
+dev = ["isort"]
+```
+
+### Production vs Development
+
+- **Development**: Uses `uv run uvicorn` with `--reload` for hot reloading
+- **Production**: Uses `uv run gunicorn` with Uvicorn workers for better performance
+- **Uvicorn Standard**: Includes `uvloop`, `httptools`, `watchfiles`, and `websockets` for production optimization
 
 ## Application Architecture
 
@@ -637,64 +682,70 @@ The project is set up for comprehensive Test-Driven Development with pytest, inc
 
 ### Pytest Commands
 
+**Note**: If test dependencies aren't available in the container, install them first:
+
+```bash
+docker compose exec web uv sync --extra test --extra dev
+```
+
 #### Basic Test Execution
 
 ```bash
 # Normal run - execute all tests
-docker compose exec web python -m pytest
+docker compose exec web uv run python -m pytest
 
 # Run with verbose output (detailed test names and results)
-docker compose exec web python -m pytest -v
+docker compose exec web uv run python -m pytest -v
 
 # Disable warnings during test execution
-docker compose exec web python -m pytest -p no:warnings
+docker compose exec web uv run python -m pytest -p no:warnings
 
 # Run with output capture disabled (see print statements)
-docker compose exec web python -m pytest -s
+docker compose exec web uv run python -m pytest -s
 ```
 
 #### Selective Test Execution
 
 ```bash
 # Run specific test file
-docker compose exec web python -m pytest tests/test_ping.py
+docker compose exec web uv run python -m pytest tests/test_ping.py
 
 # Run specific test function
-docker compose exec web python -m pytest tests/test_ping.py::test_ping
+docker compose exec web uv run python -m pytest tests/test_ping.py::test_ping
 
 # Run tests matching a pattern (supports complex expressions)
-docker compose exec web python -m pytest -k "ping"
-docker compose exec web python -m pytest -k "summary and not test_read_summary"
+docker compose exec web uv run python -m pytest -k "ping"
+docker compose exec web uv run python -m pytest -k "summary and not test_read_summary"
 
 # Run only the last failed tests
-docker compose exec web python -m pytest --lf
+docker compose exec web uv run python -m pytest --lf
 ```
 
 #### Failure Handling
 
 ```bash
 # Stop the test session after the first failure
-docker compose exec web python -m pytest -x
+docker compose exec web uv run python -m pytest -x
 
 # Stop the test run after specific number of failures
-docker compose exec web python -m pytest --maxfail=2
+docker compose exec web uv run python -m pytest --maxfail=2
 
 # Enter Python debugger (PDB) after first failure then end session
-docker compose exec web python -m pytest -x --pdb
+docker compose exec web uv run python -m pytest -x --pdb
 
 # Show local variables in tracebacks for better debugging
-docker compose exec web python -m pytest -l
+docker compose exec web uv run python -m pytest -l
 ```
 
 #### Performance and Analysis
 
 ```bash
 # List the slowest tests (adjust number as needed)
-docker compose exec web python -m pytest --durations=2
-docker compose exec web python -m pytest --durations=10
+docker compose exec web uv run python -m pytest --durations=2
+docker compose exec web uv run python -m pytest --durations=10
 
 # Run tests in parallel (if pytest-xdist is installed)
-docker compose exec web python -m pytest -n auto
+docker compose exec web uv run python -m pytest -n auto
 ```
 
 #### Coverage Reports
@@ -703,25 +754,25 @@ The project includes comprehensive code coverage tracking using `pytest-cov` (co
 
 ```bash
 # Run tests with basic coverage report in terminal
-docker compose exec web python -m pytest --cov=app
+docker compose exec web uv run python -m pytest --cov=app
 
 # Generate detailed HTML coverage report (recommended)
-docker compose exec web python -m pytest --cov=app --cov-report=html
+docker compose exec web uv run python -m pytest --cov=app --cov-report=html
 
 # Show missing lines in terminal coverage report
-docker compose exec web python -m pytest --cov=app --cov-report=term-missing
+docker compose exec web uv run python -m pytest --cov=app --cov-report=term-missing
 
 # Generate multiple report formats simultaneously
-docker compose exec web python -m pytest --cov=app --cov-report=html --cov-report=term-missing
+docker compose exec web uv run python -m pytest --cov=app --cov-report=html --cov-report=term-missing
 
 # Combine coverage with other pytest options
-docker compose exec web python -m pytest --cov=app --cov-report=html -v -s
+docker compose exec web uv run python -m pytest --cov=app --cov-report=html -v -s
 
 # Set minimum coverage threshold (fails if below threshold)
-docker compose exec web python -m pytest --cov=app --cov-fail-under=85
+docker compose exec web uv run python -m pytest --cov=app --cov-fail-under=85
 
 # Include coverage for test files themselves
-docker compose exec web python -m pytest --cov=app --cov=tests --cov-report=html
+docker compose exec web uv run python -m pytest --cov=app --cov=tests --cov-report=html
 ```
 
 #### Interactive HTML Coverage Reports
@@ -730,7 +781,7 @@ When you run tests with `--cov-report=html`, an interactive HTML report is gener
 
 ```bash
 # Generate HTML coverage report
-docker compose exec web python -m pytest --cov=app --cov-report=html
+docker compose exec web uv run python -m pytest --cov=app --cov-report=html
 
 # View the report (copy to your host system and open in browser)
 # The main report file is: project/htmlcov/index.html
@@ -757,13 +808,13 @@ The coverage configuration is managed through pytest command-line options. Commo
 
 ```bash
 # Focus coverage on specific modules/packages
-docker compose exec web python -m pytest --cov=app.api --cov-report=html
+docker compose exec web uv run python -m pytest --cov=app.api --cov-report=html
 
 # Exclude specific files or directories from coverage
-docker compose exec web python -m pytest --cov=app --cov-report=html --ignore=tests/
+docker compose exec web uv run python -m pytest --cov=app --cov-report=html --ignore=tests/
 
 # Include branch coverage (measures if all code paths are tested)
-docker compose exec web python -m pytest --cov=app --cov-branch --cov-report=html
+docker compose exec web uv run python -m pytest --cov=app --cov-branch --cov-report=html
 ```
 
 #### Coverage Best Practices

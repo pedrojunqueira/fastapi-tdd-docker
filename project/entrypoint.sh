@@ -34,7 +34,7 @@ if [ "$ENVIRONMENT" = "production" ] || [ "$ENVIRONMENT" = "prod" ]; then
     # Since migrations are already initialized in the repo, 
     # we just need to apply them to the database
     echo "Applying aerich migrations..."
-    aerich upgrade
+    uv run aerich upgrade
 fi
 
 exec "$@"

@@ -1,6 +1,32 @@
-env
+# Virtual environment (platform specific - critical for uv)
+.venv/
+env/
+venv/
+
+# Environment variables
 .env
-.venv
+
+# Docker files (don't copy into themselves)
 .dockerignore
 Dockerfile
 Dockerfile.prod
+
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Testing artifacts  
+.coverage
+.pytest_cache/
+htmlcov/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS generated files
+.DS_Store
+Thumbs.db
