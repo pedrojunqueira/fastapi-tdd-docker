@@ -1,5 +1,10 @@
 # FastAPI TDD Docker Project
 
+[![CI/CD Pipeline](https://github.com/pedrojunqueira/fastapi-tdd-docker/workflows/CI/CD%20Pipeline/badge.svg)](https://github.com/pedrojunqueira/fastapi-tdd-docker/actions)
+[![Python 3.13](https://img.shields.io/badge/python-3.13-blue.svg)](https://www.python.org/downloads/)
+[![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
+[![UV Package Manager](https://img.shields.io/badge/package%20manager-uv-blue)](https://github.com/astral-sh/uv)
+
 A FastAPI application with PostgreSQL database, containerized with Docker and orchestrated with Docker Compose, designed for Test-Driven Development (TDD) workflows using Tortoise ORM for async database operations.
 
 ## 🚀 Latest Updates
@@ -18,9 +23,15 @@ Deploy to Azure in minutes with: `azd up`
 
 ```
 fastapi-tdd-docker/
+├── .github/                    # GitHub Actions CI/CD workflows
+│   ├── workflows/             # GitHub Actions workflow files
+│   │   ├── ci-cd.yml         # Main CI/CD pipeline (test, lint, deploy)
+│   │   └── pr-validation.yml # Pull request validation workflow
+│   └── dependabot.yml        # Automated dependency updates
 ├── docker-compose.yml          # Docker Compose configuration
 ├── scripts/                    # Development and utility scripts
-│   └── lint.sh                # Ruff linting and formatting script
+│   ├── lint.sh               # Ruff linting and formatting script
+│   └── setup-github-actions.sh # Azure service principal setup helper
 ├── project/                    # Application source code
 │   ├── Dockerfile             # Docker image definition
 │   ├── pyproject.toml         # Python project configuration and dependencies (UV-based)
@@ -1375,13 +1386,230 @@ docker-compose up --build
 - **Image build failures**: Verify Dockerfile.prod and ensure all dependencies are properly specified
 - **Port issues**: Ensure container is exposing port 8000 (not 8004 like local development)
 
+## CI/CD Pipeline with GitHub Actions
+
+This project includes a comprehensive CI/CD pipeline that automatically tests, validates, and deploys your FastAPI application to Azure.
+
+### Pipeline Overview
+
+The CI/CD pipeline consists of multiple workflows:
+
+#### 1. Main CI/CD Pipeline (`.github/workflows/ci-cd.yml`)
+
+Triggers on pushes to `master` branch and runs:
+
+**Testing & Coverage:**
+
+- Sets up PostgreSQL test database
+- Runs all tests with pytest
+- Generates coverage reports (minimum 80% required)
+- Uploads coverage to Codecov
+- Archives HTML coverage reports as artifacts
+
+**Code Quality:**
+
+- Linting with Ruff (all configured rule sets)
+- Code formatting validation with Ruff
+- Security scanning with Ruff security rules
+
+**Build Validation:**
+
+- Tests Docker image builds (development and production)
+- Uses GitHub Actions cache for faster builds
+
+**Azure Deployment** (only on `master` pushes):
+
+- Authenticates with Azure using service principal
+- Deploys using `azd up` command
+- Tests deployed application endpoints
+- Creates deployment summary with links
+
+#### 2. Pull Request Validation (`.github/workflows/pr-validation.yml`)
+
+Runs the same quality checks on pull requests but skips deployment:
+
+- All tests and coverage checks
+- Code quality validation
+- Security scanning
+- Docker build validation
+- Automatic PR comments on failures
+
+#### 3. Dependency Management
+
+Dependabot automatically creates PRs for:
+
+- Python package updates (weekly)
+- GitHub Actions updates (weekly)
+- Docker base image updates (weekly)
+
+### Required GitHub Secrets
+
+To set up the CI/CD pipeline, add these secrets to your GitHub repository:
+
+#### Azure Authentication (Required for deployment)
+
+1. **Create Azure Service Principal:**
+
+   ```bash
+   # Login to Azure
+   az login
+
+   # Create service principal (replace with your subscription ID)
+   az ad sp create-for-rbac \
+     --name "github-actions-fastapi-tdd" \
+     --role contributor \
+     --scopes /subscriptions/<YOUR_SUBSCRIPTION_ID> \
+     --sdk-auth
+   ```
+
+2. **Add GitHub Secrets:**
+   - `AZURE_CLIENT_ID` - Service principal client ID
+   - `AZURE_CLIENT_SECRET` - Service principal client secret
+   - `AZURE_TENANT_ID` - Your Azure tenant ID
+   - `AZURE_SUBSCRIPTION_ID` - Your Azure subscription ID
+
+#### Optional Secrets
+
+- `CODECOV_TOKEN` - For coverage reporting (get from [codecov.io](https://codecov.io))
+
+### GitHub Secrets Setup
+
+1. Go to your repository on GitHub
+2. Navigate to **Settings** → **Secrets and variables** → **Actions**
+3. Click **New repository secret** for each secret above
+
+### Pipeline Features
+
+**🚀 **Performance Optimizations:\*\*
+
+- UV package manager for ultra-fast dependency installation
+- Docker layer caching with GitHub Actions cache
+- Parallel job execution where possible
+- Smart conditional deployments
+
+**🛡️ **Security & Quality:\*\*
+
+- Comprehensive security scanning with Ruff
+- Code coverage enforcement (80% minimum)
+- Automated formatting and linting validation
+- Dependency vulnerability scanning with Dependabot
+
+**📊 **Monitoring & Reporting:\*\*
+
+- Coverage reports with HTML artifacts
+- Deployment health checks
+- Detailed GitHub Actions summaries
+- PR status checks and comments
+
+**🔄 **Azure Integration:\*\*
+
+- Automated deployment to Azure Container Apps
+- Environment-specific configurations
+- Post-deployment health verification
+- Rollback capabilities via Azure portal
+
+### Development Workflow
+
+1. **Create Feature Branch:**
+
+   ```bash
+   git checkout -b feature/new-feature
+   ```
+
+2. **Development with Quality Checks:**
+
+   ```bash
+   # Run tests locally
+   docker-compose exec web uv run python -m pytest --cov=app --cov-report=html
+
+   # Check code quality
+   ./scripts/lint.sh all
+
+   # Test Docker build
+   docker-compose up --build
+   ```
+
+3. **Create Pull Request:**
+
+   - Push to feature branch
+   - Create PR against `master`
+   - PR validation workflow runs automatically
+   - Address any failing checks
+
+4. **Merge and Deploy:**
+   - Merge PR to `master`
+   - Main CI/CD pipeline runs automatically
+   - Application deploys to Azure if all checks pass
+
+### Pipeline Status and Monitoring
+
+**Badge Examples (add to your README):**
+
+```markdown
+![CI/CD](https://github.com/pedrojunqueira/fastapi-tdd-docker/workflows/CI/CD%20Pipeline/badge.svg)
+![Coverage](https://codecov.io/gh/pedrojunqueira/fastapi-tdd-docker/branch/master/graph/badge.svg)
+```
+
+**View Pipeline Results:**
+
+- **Actions Tab:** See all workflow runs and logs
+- **Deployments:** View deployment history and status
+- **Security Tab:** Review security alerts and dependency updates
+- **Codecov:** Detailed coverage reports and trends
+
+### Troubleshooting CI/CD
+
+**Common Issues:**
+
+1. **Azure Authentication Failures:**
+
+   ```bash
+   # Verify service principal permissions
+   az role assignment list --assignee <CLIENT_ID>
+   ```
+
+2. **Test Failures:**
+
+   ```bash
+   # Run tests locally with same environment
+   docker-compose exec web uv run python -m pytest -v --tb=short
+   ```
+
+3. **Coverage Below Threshold:**
+
+   ```bash
+   # Generate detailed coverage report
+   docker-compose exec web uv run python -m pytest --cov=app --cov-report=html
+   # Open project/htmlcov/index.html to see uncovered lines
+   ```
+
+4. **Code Quality Failures:**
+   ```bash
+   # Fix automatically
+   ./scripts/lint.sh all
+   ```
+
+**Pipeline Optimization:**
+
+- Tests run in ~2-3 minutes with PostgreSQL service
+- Code quality checks complete in ~1 minute
+- Docker builds leverage caching for faster runs
+- Azure deployment typically takes 3-5 minutes
+
 ## Contributing
 
 1. Fork the repository
-2. Create a feature branch
-3. Make your changes
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Make your changes following the code quality standards
 4. Add tests for new functionality
-5. Submit a pull request
+5. Ensure all local checks pass:
+   ```bash
+   ./scripts/lint.sh all
+   docker-compose exec web uv run python -m pytest --cov=app --cov-fail-under=80
+   ```
+6. Submit a pull request
+7. Wait for CI/CD validation to pass
+8. Address any review feedback
 
 ## License
 

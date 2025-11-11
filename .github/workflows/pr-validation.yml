@@ -1,0 +1,200 @@
+name: PR Validation
+
+on:
+  pull_request:
+    branches: [master]
+
+jobs:
+  # Job 1: Run tests with coverage
+  test:
+    name: "Tests & Coverage"
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: web_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install UV
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+          cache-dependency-glob: "project/uv.lock"
+
+      - name: Install dependencies
+        working-directory: ./project
+        run: |
+          uv sync --extra test --extra dev
+
+      - name: Wait for PostgreSQL
+        run: |
+          timeout 30s bash -c 'until pg_isready -h localhost -p 5432 -U postgres; do sleep 1; done'
+
+      - name: Set up test environment
+        working-directory: ./project
+        run: |
+          # Create test database if it doesn't exist
+          PGPASSWORD=postgres psql -h localhost -U postgres -c "CREATE DATABASE web_test;" || true
+
+          # Run database migrations for tests
+          uv run aerich init -t app.db.TORTOISE_ORM || true
+          uv run aerich init-db || true
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/web_dev
+          DATABASE_TEST_URL: postgresql://postgres:postgres@localhost:5432/web_test
+          ENVIRONMENT: dev
+          TESTING: 1
+
+      - name: Run tests with coverage
+        working-directory: ./project
+        run: |
+          uv run python -m pytest --cov=app --cov-report=term-missing --cov-fail-under=80 -v
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/web_dev
+          DATABASE_TEST_URL: postgresql://postgres:postgres@localhost:5432/web_test
+          ENVIRONMENT: dev
+          TESTING: 1
+
+  # Job 2: Code quality checks
+  code-quality:
+    name: "Code Quality (Ruff)"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install UV
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+          cache-dependency-glob: "project/uv.lock"
+
+      - name: Install dependencies
+        working-directory: ./project
+        run: |
+          uv sync --extra dev
+
+      - name: Run Ruff linting
+        working-directory: ./project
+        run: |
+          uv run ruff check app/ tests/ --output-format=github
+
+      - name: Run Ruff formatting check
+        working-directory: ./project
+        run: |
+          uv run ruff format app/ tests/ --check
+
+      - name: Comment PR with code quality results
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '❌ Code quality checks failed. Please run `./scripts/lint.sh all` locally to fix linting and formatting issues.'
+            })
+
+  # Job 3: Security checks
+  security:
+    name: "Security Scan"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install UV
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+          cache-dependency-glob: "project/uv.lock"
+
+      - name: Install dependencies
+        working-directory: ./project
+        run: |
+          uv sync --extra dev
+
+      - name: Run Ruff security checks
+        working-directory: ./project
+        run: |
+          uv run ruff check app/ tests/ --select=S --output-format=github
+
+  # Job 4: Build validation
+  build:
+    name: "Docker Build Test"
+    runs-on: ubuntu-latest
+    needs: [test, code-quality]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and test Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./project
+          file: ./project/Dockerfile
+          push: false
+          tags: fastapi-tdd-test:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # Summary job for PR status checks
+  pr-validation-complete:
+    name: "PR Validation Complete"
+    runs-on: ubuntu-latest
+    needs: [test, code-quality, security, build]
+    if: always()
+
+    steps:
+      - name: Check all jobs
+        run: |
+          if [[ "${{ needs.test.result }}" == "success" && 
+                "${{ needs.code-quality.result }}" == "success" && 
+                "${{ needs.security.result }}" == "success" && 
+                "${{ needs.build.result }}" == "success" ]]; then
+            echo "✅ All PR validation checks passed!"
+            exit 0
+          else
+            echo "❌ Some PR validation checks failed:"
+            echo "- Tests: ${{ needs.test.result }}"
+            echo "- Code Quality: ${{ needs.code-quality.result }}"
+            echo "- Security: ${{ needs.security.result }}"
+            echo "- Build: ${{ needs.build.result }}"
+            exit 1
+          fi

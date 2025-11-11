@@ -1,0 +1,275 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+env:
+  # Azure deployment environment
+  AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+  AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+  AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+jobs:
+  # Job 1: Run tests with coverage
+  test:
+    name: "Tests & Coverage"
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: web_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install UV
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+          cache-dependency-glob: "project/uv.lock"
+
+      - name: Install dependencies
+        working-directory: ./project
+        run: |
+          uv sync --extra test --extra dev
+
+      - name: Wait for PostgreSQL
+        run: |
+          timeout 30s bash -c 'until pg_isready -h localhost -p 5432 -U postgres; do sleep 1; done'
+
+      - name: Set up test environment
+        working-directory: ./project
+        run: |
+          # Create test database if it doesn't exist
+          PGPASSWORD=postgres psql -h localhost -U postgres -c "CREATE DATABASE web_test;" || true
+
+          # Run database migrations for tests
+          uv run aerich init -t app.db.TORTOISE_ORM || true
+          uv run aerich init-db || true
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/web_dev
+          DATABASE_TEST_URL: postgresql://postgres:postgres@localhost:5432/web_test
+          ENVIRONMENT: dev
+          TESTING: 1
+
+      - name: Run tests with coverage
+        working-directory: ./project
+        run: |
+          uv run python -m pytest --cov=app --cov-report=html --cov-report=term-missing --cov-report=xml --cov-fail-under=80 -v
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/web_dev
+          DATABASE_TEST_URL: postgresql://postgres:postgres@localhost:5432/web_test
+          ENVIRONMENT: dev
+          TESTING: 1
+
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./project/coverage.xml
+          fail_ci_if_error: false
+          verbose: true
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+      - name: Archive coverage HTML report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: project/htmlcov/
+          retention-days: 30
+
+  # Job 2: Code quality checks (linting and formatting)
+  code-quality:
+    name: "Code Quality (Ruff)"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install UV
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+          cache-dependency-glob: "project/uv.lock"
+
+      - name: Install dependencies
+        working-directory: ./project
+        run: |
+          uv sync --extra dev
+
+      - name: Run Ruff linting
+        working-directory: ./project
+        run: |
+          uv run ruff check app/ tests/ --output-format=github
+
+      - name: Run Ruff formatting check
+        working-directory: ./project
+        run: |
+          uv run ruff format app/ tests/ --check
+
+  # Job 3: Security checks
+  security:
+    name: "Security Scan"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install UV
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+          cache-dependency-glob: "project/uv.lock"
+
+      - name: Install dependencies
+        working-directory: ./project
+        run: |
+          uv sync --extra dev
+
+      - name: Run Ruff security checks
+        working-directory: ./project
+        run: |
+          uv run ruff check app/ tests/ --select=S --output-format=github
+
+  # Job 4: Build Docker images (for validation)
+  build:
+    name: "Docker Build Test"
+    runs-on: ubuntu-latest
+    needs: [test, code-quality]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build development image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./project
+          file: ./project/Dockerfile
+          push: false
+          tags: fastapi-tdd-dev:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build production image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./project
+          file: ./project/Dockerfile.prod
+          push: false
+          tags: fastapi-tdd-prod:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # Job 5: Deploy to Azure (only on successful tests and main branch)
+  deploy:
+    name: "Deploy to Azure"
+    runs-on: ubuntu-latest
+    needs: [test, code-quality, security, build]
+    if: github.ref == 'refs/heads/master' && github.event_name == 'push'
+    environment: production
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Azure CLI
+        uses: azure/setup-azd@v1.0.0
+
+      - name: Log in to Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Deploy to Azure with azd
+        run: |
+          azd auth login --client-id "$AZURE_CLIENT_ID" --client-secret "$AZURE_CLIENT_SECRET" --tenant-id "$AZURE_TENANT_ID"
+          azd env select production || azd env new production
+          azd up --no-prompt
+        env:
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_ENV_NAME: production
+          AZURE_LOCATION: australiaeast
+
+      - name: Get deployment URL
+        id: get-url
+        run: |
+          URL=$(azd show --output json | jq -r '.services.web.endpoint // "Not available"')
+          echo "deployment-url=$URL" >> $GITHUB_OUTPUT
+
+      - name: Test deployed application
+        if: steps.get-url.outputs.deployment-url != 'Not available'
+        run: |
+          echo "Testing deployment at: ${{ steps.get-url.outputs.deployment-url }}"
+
+          # Wait for deployment to be ready
+          for i in {1..10}; do
+            if curl -f "${{ steps.get-url.outputs.deployment-url }}/ping" > /dev/null 2>&1; then
+              echo "✅ Deployment is ready!"
+              break
+            fi
+            echo "⏳ Waiting for deployment... (attempt $i/10)"
+            sleep 30
+          done
+
+          # Test the ping endpoint
+          RESPONSE=$(curl -s "${{ steps.get-url.outputs.deployment-url }}/ping")
+          echo "Ping response: $RESPONSE"
+
+          # Verify response contains expected fields
+          echo "$RESPONSE" | jq -e '.ping == "pong!" and .environment == "production"'
+
+      - name: Create deployment summary
+        run: |
+          echo "## 🚀 Deployment Successful!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Application URL:** ${{ steps.get-url.outputs.deployment-url }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Quick Links:" >> $GITHUB_STEP_SUMMARY
+          echo "- 🏥 [Health Check](${{ steps.get-url.outputs.deployment-url }}/ping)" >> $GITHUB_STEP_SUMMARY
+          echo "- 📚 [API Documentation](${{ steps.get-url.outputs.deployment-url }}/docs)" >> $GITHUB_STEP_SUMMARY
+          echo "- 🔍 [Alternative Docs](${{ steps.get-url.outputs.deployment-url }}/redoc)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Test Results:" >> $GITHUB_STEP_SUMMARY
+          echo "✅ All tests passed" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Code quality checks passed" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Security scans passed" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Docker builds successful" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Azure deployment successful" >> $GITHUB_STEP_SUMMARY
