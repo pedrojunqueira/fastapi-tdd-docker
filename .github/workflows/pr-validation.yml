@@ -59,8 +59,8 @@ jobs:
           uv run aerich init -t app.db.TORTOISE_ORM || true
           uv run aerich init-db || true
         env:
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/web_dev
-          DATABASE_TEST_URL: postgresql://postgres:postgres@localhost:5432/web_test
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/web_dev
+          DATABASE_TEST_URL: postgres://postgres:postgres@localhost:5432/web_test
           ENVIRONMENT: dev
           TESTING: 1
 
@@ -69,8 +69,8 @@ jobs:
         run: |
           uv run python -m pytest --cov=app --cov-report=term-missing --cov-fail-under=80 -v
         env:
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/web_dev
-          DATABASE_TEST_URL: postgresql://postgres:postgres@localhost:5432/web_test
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/web_dev
+          DATABASE_TEST_URL: postgres://postgres:postgres@localhost:5432/web_test
           ENVIRONMENT: dev
           TESTING: 1
 

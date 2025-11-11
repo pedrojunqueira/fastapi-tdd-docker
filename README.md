@@ -24,10 +24,9 @@ Deploy to Azure in minutes with: `azd up`
 ```
 fastapi-tdd-docker/
 ├── .github/                    # GitHub Actions CI/CD workflows
-│   ├── workflows/             # GitHub Actions workflow files
-│   │   ├── ci-cd.yml         # Main CI/CD pipeline (test, lint, deploy)
-│   │   └── pr-validation.yml # Pull request validation workflow
-│   └── dependabot.yml        # Automated dependency updates
+│   └── workflows/             # GitHub Actions workflow files
+│       ├── ci-cd.yml         # Main CI/CD pipeline (test, lint, deploy)
+│       └── pr-validation.yml # Pull request validation workflow
 ├── docker-compose.yml          # Docker Compose configuration
 ├── scripts/                    # Development and utility scripts
 │   ├── lint.sh               # Ruff linting and formatting script
@@ -1434,14 +1433,6 @@ Runs the same quality checks on pull requests but skips deployment:
 - Docker build validation
 - Automatic PR comments on failures
 
-#### 3. Dependency Management
-
-Dependabot automatically creates PRs for:
-
-- Python package updates (weekly)
-- GitHub Actions updates (weekly)
-- Docker base image updates (weekly)
-
 ### Required GitHub Secrets
 
 To set up the CI/CD pipeline, add these secrets to your GitHub repository:
@@ -1492,7 +1483,6 @@ To set up the CI/CD pipeline, add these secrets to your GitHub repository:
 - Comprehensive security scanning with Ruff
 - Code coverage enforcement (80% minimum)
 - Automated formatting and linting validation
-- Dependency vulnerability scanning with Dependabot
 
 **📊 **Monitoring & Reporting:\*\*
 

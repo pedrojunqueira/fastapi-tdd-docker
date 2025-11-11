@@ -34,12 +34,6 @@ A comprehensive GitHub Actions CI/CD pipeline for your FastAPI TDD Docker projec
   - Status checks for merge protection
   - Build validation without deployment
 
-#### 3. **Dependency Management** (`.github/dependabot.yml`)
-
-- **Weekly Updates**: Python packages, GitHub Actions, Docker images
-- **Auto-assigns**: PRs to you for review
-- **Smart Labels**: Categorizes updates by type
-
 ## 📋 **Setup Requirements**
 
 ### **Required GitHub Secrets**
@@ -123,7 +117,6 @@ git push origin master
 | ---------------- | -------------- | ---------------------------------------------- |
 | Push to `master` | Main CI/CD     | Test → Quality → Security → Build → **Deploy** |
 | Pull Request     | PR Validation  | Test → Quality → Security → Build (no deploy)  |
-| Weekly Schedule  | Dependabot     | Create dependency update PRs                   |
 | Manual Trigger   | Both workflows | Can be triggered manually from Actions tab     |
 
 ## 📈 **Monitoring & Reporting**
