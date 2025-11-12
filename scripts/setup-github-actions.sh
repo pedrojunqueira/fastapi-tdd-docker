@@ -110,6 +110,15 @@ create_service_principal() {
     CLIENT_SECRET=$(echo "$SP_OUTPUT" | jq -r '.password')
     
     print_success "Service principal created successfully!"
+    
+    print_info "Adding User Access Administrator role for Azure deployment permissions..."
+    az role assignment create \
+        --assignee "$CLIENT_ID" \
+        --role "User Access Administrator" \
+        --scope "/subscriptions/$SUBSCRIPTION_ID" \
+        --output none
+    
+    print_success "Additional permissions configured successfully!"
 }
 
 # Display GitHub secrets

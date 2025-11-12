@@ -58,17 +58,36 @@ These secrets must be added to your GitHub repository for Azure deployment:
 ### 1. **Create Azure Service Principal**
 
 ```bash
-# Run the helper script (recommended)
+# Run the helper script (recommended) - includes all required permissions
 ./scripts/setup-github-actions.sh
 
 # Or manually:
 az login
+
+# Create service principal with Contributor role
 az ad sp create-for-rbac \
   --name "github-actions-fastapi-tdd" \
   --role contributor \
   --scopes /subscriptions/<YOUR_SUBSCRIPTION_ID> \
   --output json
+
+# IMPORTANT: Also add User Access Administrator role for azd deployments
+az role assignment create \
+  --assignee <CLIENT_ID_FROM_ABOVE> \
+  --role "User Access Administrator" \
+  --scope /subscriptions/<YOUR_SUBSCRIPTION_ID>
 ```
+
+#### **🔐 Required Azure Permissions**
+
+The service principal needs **both** roles for successful azd deployment:
+
+| Role                          | Purpose                           | Required For                                  |
+| ----------------------------- | --------------------------------- | --------------------------------------------- |
+| **Contributor**               | Create and manage Azure resources | Resource provisioning, Container Apps, etc.   |
+| **User Access Administrator** | Create role assignments           | Container Registry access, managed identities |
+
+> **💡 Note**: User Access Administrator is needed because azd creates role assignments between services (e.g., Container Apps accessing Container Registry). This is a standard requirement for automated Azure deployments.
 
 ### 2. **Add GitHub Secrets**
 

@@ -1445,13 +1445,21 @@ To set up the CI/CD pipeline, add these secrets to your GitHub repository:
    # Login to Azure
    az login
 
-   # Create service principal (replace with your subscription ID)
+   # Create service principal with Contributor role
    az ad sp create-for-rbac \
      --name "github-actions-fastapi-tdd" \
      --role contributor \
      --scopes /subscriptions/<YOUR_SUBSCRIPTION_ID> \
-     --sdk-auth
+     --output json
+
+   # Add User Access Administrator role (required for azd deployments)
+   az role assignment create \
+     --assignee <CLIENT_ID_FROM_ABOVE> \
+     --role "User Access Administrator" \
+     --scope /subscriptions/<YOUR_SUBSCRIPTION_ID>
    ```
+
+   > **Note**: Both Contributor and User Access Administrator roles are required for successful Azure deployments with azd.
 
 2. **Add GitHub Secrets:**
    - `AZURE_CLIENT_ID` - Service principal client ID
