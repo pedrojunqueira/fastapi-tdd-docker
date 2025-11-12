@@ -5,6 +5,9 @@ env
 *.pyc
 .DS_Store
 
+# GitHub secrets (security)
+github-secrets*
+
 # Coverage reports
 htmlcov/
 .coverage
