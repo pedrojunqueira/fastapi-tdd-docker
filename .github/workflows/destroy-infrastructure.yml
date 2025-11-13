@@ -1,0 +1,133 @@
+name: 🗑️ Destroy Azure Infrastructure
+
+on:
+  workflow_dispatch: # Manual trigger only - prevents accidental destruction
+    inputs:
+      confirmation:
+        description: 'Type "DESTROY" to confirm infrastructure deletion'
+        required: true
+        type: string
+
+env:
+  AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+  AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+  AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+jobs:
+  destroy:
+    name: "🔥 Destroy Azure Resources"
+    runs-on: ubuntu-latest
+    if: github.event.inputs.confirmation == 'DESTROY'
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: ⚠️ Destruction Confirmation
+        run: |
+          echo "🚨 DESTRUCTIVE ACTION CONFIRMED"
+          echo "This will permanently delete all Azure resources"
+          echo "Environment: production"
+          echo "Confirmation received: ${{ github.event.inputs.confirmation }}"
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Azure Developer CLI (azd)
+        run: |
+          curl -fsSL https://aka.ms/install-azd.sh | bash
+          echo "$HOME/.azd/bin" >> $GITHUB_PATH
+
+      - name: Log in to Azure
+        uses: azure/login@v2
+        with:
+          creds: '{"clientId":"${{ secrets.AZURE_CLIENT_ID }}","clientSecret":"${{ secrets.AZURE_CLIENT_SECRET }}","subscriptionId":"${{ secrets.AZURE_SUBSCRIPTION_ID }}","tenantId":"${{ secrets.AZURE_TENANT_ID }}"}'
+
+      - name: List existing resources before destruction
+        run: |
+          echo "📋 Current Azure resources:"
+          az group list --output table || echo "No resource groups found"
+
+          echo "🔍 Looking for azd-created resources:"
+          az group list --query "[?contains(name, 'rg-') || contains(name, 'production')]" --output table || echo "No matching resource groups found"
+
+      - name: Destroy Infrastructure with azd
+        run: |
+          echo "🔧 Authenticating azd with service principal..."
+          azd auth login --client-id "$AZURE_CLIENT_ID" --client-secret "$AZURE_CLIENT_SECRET" --tenant-id "$AZURE_TENANT_ID"
+
+          echo "🌍 Setting up production environment..."
+          azd env select production || azd env new production
+
+          echo "📍 Setting Azure location..."
+          azd env set AZURE_LOCATION australiaeast
+
+          echo "🗑️ Starting infrastructure destruction..."
+          azd down --force --purge
+
+          echo "✅ azd destruction completed"
+        env:
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_ENV_NAME: production
+          AZURE_APP_NAME: fastapi-tdd-docker
+
+      - name: Verify resource cleanup
+        run: |
+          echo "🔍 Verifying resource cleanup..."
+
+          echo "Remaining resource groups:"
+          az group list --output table || echo "No resource groups found"
+
+          echo "Checking for any remaining azd resources:"
+          REMAINING=$(az group list --query "[?contains(name, 'rg-') || contains(name, 'production')]" --output tsv | wc -l)
+
+          if [ "$REMAINING" -eq 0 ]; then
+            echo "✅ All azd resources successfully removed"
+          else
+            echo "⚠️ Some resources may still exist:"
+            az group list --query "[?contains(name, 'rg-') || contains(name, 'production')]" --output table
+            echo "💡 You may need to manually delete remaining resources in the Azure Portal"
+          fi
+
+      - name: 🎉 Destruction Summary
+        run: |
+          echo "## 🗑️ Infrastructure Destruction Complete!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### ✅ Actions Performed:" >> $GITHUB_STEP_SUMMARY
+          echo "- 🔧 Authenticated with Azure using service principal" >> $GITHUB_STEP_SUMMARY
+          echo "- 🌍 Selected production environment" >> $GITHUB_STEP_SUMMARY
+          echo "- 🗑️ Executed \`azd down --force --purge\`" >> $GITHUB_STEP_SUMMARY
+          echo "- 🔍 Verified resource cleanup" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 💰 Cost Impact:" >> $GITHUB_STEP_SUMMARY
+          echo "- All Azure resources have been destroyed" >> $GITHUB_STEP_SUMMARY
+          echo "- No further charges should be incurred" >> $GITHUB_STEP_SUMMARY
+          echo "- Verify in [Azure Cost Management](https://portal.azure.com/#view/Microsoft_Azure_CostManagement/Menu/~/overview)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🧹 Optional Cleanup:" >> $GITHUB_STEP_SUMMARY
+          echo "Consider removing GitHub secrets if no longer needed:" >> $GITHUB_STEP_SUMMARY
+          echo "- \`AZURE_CLIENT_ID\`" >> $GITHUB_STEP_SUMMARY
+          echo "- \`AZURE_CLIENT_SECRET\`" >> $GITHUB_STEP_SUMMARY
+          echo "- \`AZURE_TENANT_ID\`" >> $GITHUB_STEP_SUMMARY
+          echo "- \`AZURE_SUBSCRIPTION_ID\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**🎊 Infrastructure cleanup successful!**" >> $GITHUB_STEP_SUMMARY
+
+  # Safety job that runs if wrong confirmation is provided
+  safety-check:
+    name: "🛡️ Safety Check"
+    runs-on: ubuntu-latest
+    if: github.event.inputs.confirmation != 'DESTROY'
+
+    steps:
+      - name: ❌ Incorrect Confirmation
+        run: |
+          echo "🛡️ SAFETY CHECK ACTIVATED"
+          echo "❌ Destruction cancelled - incorrect confirmation provided"
+          echo "📝 You entered: '${{ github.event.inputs.confirmation }}'"
+          echo "✅ Required: 'DESTROY'"
+          echo ""
+          echo "💡 To destroy infrastructure, re-run this workflow and type exactly: DESTROY"
+          echo "⚠️ This is a safety measure to prevent accidental resource deletion"
+          exit 1

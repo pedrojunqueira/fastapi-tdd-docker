@@ -9,7 +9,9 @@ param environmentName string
 @description('Primary location for all resources')
 param location string
 
-
+@minLength(1)
+@description('Name of the application')
+param appName string = 'fastapi-tdd-docker'
 
 @description('Name of the resource group. Leave empty to let azd generate one.')
 param resourceGroupName string = ''
@@ -23,7 +25,7 @@ var postgresPassword = uniqueString(subscription().id, environmentName, 'postgre
 
 // Organize resources in a resource group
 resource rg 'Microsoft.Resources/resourceGroups@2021-04-01' = {
-  name: !empty(resourceGroupName) ? resourceGroupName : '${abbrs.resourcesResourceGroups}${environmentName}'
+  name: !empty(resourceGroupName) ? resourceGroupName : '${abbrs.resourcesResourceGroups}${appName}-${environmentName}'
   location: location
   tags: tags
 }
