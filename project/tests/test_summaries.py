@@ -122,15 +122,15 @@ def test_update_summary(test_app_with_db):
 
 
 @pytest.mark.parametrize(
-    "summary_id, payload, status_code, detail",
+    ("summary_id", "payload", "status_code", "detail"),
     [
-        [
+        (
             999,
             {"url": "https://foo.bar/", "summary": "updated!"},
             404,
             "Summary not found",
-        ],
-        [
+        ),
+        (
             0,
             {"url": "https://foo.bar/", "summary": "updated!"},
             422,
@@ -143,8 +143,8 @@ def test_update_summary(test_app_with_db):
                     "ctx": {"gt": 0},
                 }
             ],
-        ],
-        [
+        ),
+        (
             1,
             {},
             422,
@@ -162,8 +162,8 @@ def test_update_summary(test_app_with_db):
                     "input": {},
                 },
             ],
-        ],
-        [
+        ),
+        (
             1,
             {"url": "https://foo.bar/"},
             422,
@@ -175,7 +175,7 @@ def test_update_summary(test_app_with_db):
                     "input": {"url": "https://foo.bar/"},
                 }
             ],
-        ],
+        ),
     ],
 )
 def test_update_summary_invalid(
@@ -185,7 +185,6 @@ def test_update_summary_invalid(
         f"/summaries/{summary_id}/", data=json.dumps(payload)
     )
     assert response.status_code == status_code
-    print(response.json()["detail"])
     assert response.json()["detail"] == detail
 
 
