@@ -17,7 +17,7 @@ def test_create_summary_without_summary_field(test_app_with_db):
     response = test_app_with_db.post(
         "/summaries/", data=json.dumps({"url": "https://example.com"})
     )
-    
+
     assert response.status_code == 201
     response_data = response.json()
     assert response_data["url"] == "https://example.com/"  # Pydantic normalizes URLs
@@ -28,15 +28,16 @@ def test_create_summary_with_custom_summary(test_app_with_db):
     """Test creating a summary with a custom summary provided"""
     response = test_app_with_db.post(
         "/summaries/",
-        data=json.dumps({
-            "url": "https://example.com/article",
-            "summary": "Custom article summary"
-        })
+        data=json.dumps(
+            {"url": "https://example.com/article", "summary": "Custom article summary"}
+        ),
     )
-    
+
     assert response.status_code == 201
     response_data = response.json()
-    assert response_data["url"] == "https://example.com/article"  # Original URL preserved
+    assert (
+        response_data["url"] == "https://example.com/article"
+    )  # Original URL preserved
     assert response_data["summary"] == "Custom article summary"  # Custom value
 
 
