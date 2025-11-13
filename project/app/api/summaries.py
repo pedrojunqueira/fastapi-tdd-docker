@@ -11,12 +11,15 @@ from app.models.tortoise import SummarySchema
 router = APIRouter()
 
 
-@router.post("/", response_model=SummaryResponseSchema, status_code=201)
-async def create_summary(payload: SummaryPayloadSchema) -> SummaryResponseSchema:
+@router.post("/", response_model=SummarySchema, status_code=201)
+async def create_summary(payload: SummaryPayloadSchema) -> SummarySchema:
     summary_id = await crud.post(payload)
 
-    response_object = {"id": summary_id, "url": payload.url}
-    return response_object
+    # Return the complete created summary from database
+    summary = await crud.get(summary_id)
+    if not summary:
+        raise HTTPException(status_code=500, detail="Failed to create summary")
+    return summary
 
 
 @router.get("/{id}/", response_model=SummarySchema)
