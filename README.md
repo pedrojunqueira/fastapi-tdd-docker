@@ -687,6 +687,74 @@ docker-compose exec -T web-db pg_restore -U postgres -d web_dev backup.dump
 
 ## API Endpoints
 
+### Authentication
+
+This application uses role-based authentication with mock tokens for development and testing. All endpoints except `/ping` require authentication.
+
+#### Authentication in Swagger UI
+
+1. **Open Swagger UI**: http://localhost:8004/docs
+2. **Click "Authorize"** button (green lock icon in top-right)
+3. **Enter Bearer Token** in the format: `mock:email:role`
+4. **Click "Authorize"** and then **"Close"**
+
+#### Available Mock Tokens
+
+**🔴 Admin User (Full Access)**
+
+```
+mock:admin@test.com:admin
+```
+
+- **Permissions**: Can create, read, update, delete ALL summaries
+- **Use case**: Full administrative access
+
+**✏️ Writer User (Create + Own Content)**
+
+```
+mock:writer@test.com:writer
+```
+
+- **Permissions**: Can create summaries, can only read/update/delete their OWN summaries
+- **Use case**: Content creation with ownership restrictions
+
+**👁️ Reader User (Read Only)**
+
+```
+mock:reader@test.com:reader
+```
+
+- **Permissions**: Can only read summaries (no create/update/delete)
+- **Use case**: Read-only access
+
+#### Testing with cURL
+
+```bash
+# Admin access
+curl -H "Authorization: Bearer mock:admin@test.com:admin" \
+     http://localhost:8004/summaries/
+
+# Writer access
+curl -H "Authorization: Bearer mock:writer@test.com:writer" \
+     http://localhost:8004/summaries/
+
+# Reader access
+curl -H "Authorization: Bearer mock:reader@test.com:reader" \
+     http://localhost:8004/summaries/
+```
+
+#### Custom Users
+
+You can create custom users on the fly:
+
+```
+mock:john.doe@company.com:writer
+mock:jane.admin@company.com:admin
+mock:viewer@example.org:reader
+```
+
+The system will automatically create these users in the database with the specified roles.
+
 ### Health Check
 
 - **GET** `/ping`
