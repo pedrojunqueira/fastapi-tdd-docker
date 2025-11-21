@@ -9,9 +9,9 @@ WRITER_HEADERS = {"Authorization": "Bearer mock:writer@test.com:writer"}
 
 def test_create_summary(test_app_with_db):
     response = test_app_with_db.post(
-        "/summaries/", 
+        "/summaries/",
         data=json.dumps({"url": "https://foo.bar"}),
-        headers=WRITER_HEADERS
+        headers=WRITER_HEADERS,
     )
 
     assert response.status_code == 201
@@ -21,9 +21,9 @@ def test_create_summary(test_app_with_db):
 def test_create_summary_without_summary_field(test_app_with_db):
     """Test creating a summary without providing the optional summary field"""
     response = test_app_with_db.post(
-        "/summaries/", 
+        "/summaries/",
         data=json.dumps({"url": "https://example.com"}),
-        headers=WRITER_HEADERS
+        headers=WRITER_HEADERS,
     )
 
     assert response.status_code == 201
@@ -39,7 +39,7 @@ def test_create_summary_with_custom_summary(test_app_with_db):
         data=json.dumps(
             {"url": "https://example.com/article", "summary": "Custom article summary"}
         ),
-        headers=WRITER_HEADERS
+        headers=WRITER_HEADERS,
     )
 
     assert response.status_code == 201
@@ -73,9 +73,9 @@ def test_create_summaries_invalid_json(test_app):
 
 def test_read_summary(test_app_with_db):
     response = test_app_with_db.post(
-        "/summaries/", 
+        "/summaries/",
         data=json.dumps({"url": "https://foo.bar"}),
-        headers=WRITER_HEADERS
+        headers=WRITER_HEADERS,
     )
     summary_id = response.json()["id"]
 
@@ -111,9 +111,9 @@ def test_read_summary_incorrect_id(test_app_with_db):
 
 def test_read_all_summaries(test_app_with_db):
     response = test_app_with_db.post(
-        "/summaries/", 
+        "/summaries/",
         data=json.dumps({"url": "https://foo.bar"}),
-        headers=ADMIN_HEADERS
+        headers=ADMIN_HEADERS,
     )
     summary_id = response.json()["id"]
 
@@ -126,13 +126,15 @@ def test_read_all_summaries(test_app_with_db):
 
 def test_remove_summary(test_app_with_db):
     response = test_app_with_db.post(
-        "/summaries/", 
+        "/summaries/",
         data=json.dumps({"url": "https://foo.bar"}),
-        headers=WRITER_HEADERS
+        headers=WRITER_HEADERS,
     )
     summary_id = response.json()["id"]
 
-    response = test_app_with_db.delete(f"/summaries/{summary_id}/", headers=WRITER_HEADERS)
+    response = test_app_with_db.delete(
+        f"/summaries/{summary_id}/", headers=WRITER_HEADERS
+    )
     assert response.status_code == 200
     assert response.json() == {
         "id": summary_id,
@@ -149,16 +151,16 @@ def test_remove_summary_incorrect_id(test_app_with_db):
 
 def test_update_summary(test_app_with_db):
     response = test_app_with_db.post(
-        "/summaries/", 
+        "/summaries/",
         data=json.dumps({"url": "https://foo.bar"}),
-        headers=WRITER_HEADERS
+        headers=WRITER_HEADERS,
     )
     summary_id = response.json()["id"]
 
     response = test_app_with_db.put(
         f"/summaries/{summary_id}/",
         data=json.dumps({"url": "https://foo.bar", "summary": "updated!"}),
-        headers=WRITER_HEADERS
+        headers=WRITER_HEADERS,
     )
     assert response.status_code == 200
 
@@ -230,9 +232,7 @@ def test_update_summary_invalid(
     test_app_with_db, summary_id, payload, status_code, detail
 ):
     response = test_app_with_db.put(
-        f"/summaries/{summary_id}/", 
-        data=json.dumps(payload),
-        headers=ADMIN_HEADERS
+        f"/summaries/{summary_id}/", data=json.dumps(payload), headers=ADMIN_HEADERS
     )
     assert response.status_code == status_code
     assert response.json()["detail"] == detail
@@ -242,7 +242,7 @@ def test_update_summary_invalid_url(test_app):
     response = test_app.put(
         "/summaries/1/",
         data=json.dumps({"url": "invalid://url", "summary": "updated!"}),
-        headers=ADMIN_HEADERS
+        headers=ADMIN_HEADERS,
     )
     assert response.status_code == 422
     assert (

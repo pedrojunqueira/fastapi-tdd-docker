@@ -1,3 +1,5 @@
+from typing import Annotated
+
 from fastapi import APIRouter, Depends, HTTPException, Path
 
 from app.api import crud
@@ -16,15 +18,14 @@ router = APIRouter()
 @router.post("/", response_model=SummarySchema, status_code=201)
 async def create_summary(
     payload: SummaryPayloadSchema,
-    current_user: CurrentUserSchema = Depends(get_current_user)
+    current_user: Annotated[CurrentUserSchema, Depends(get_current_user)],
 ) -> SummarySchema:
     # Only writers and admins can create summaries
     if current_user.role not in ["writer", "admin"]:
         raise HTTPException(
-            status_code=403,
-            detail="Access denied. Writers and admins only."
+            status_code=403, detail="Access denied. Writers and admins only."
         )
-    
+
     summary_id = await crud.post(payload, current_user)
 
     # Return the complete created summary from database
@@ -36,8 +37,8 @@ async def create_summary(
 
 @router.get("/{id}/", response_model=SummarySchema)
 async def read_summary(
+    current_user: Annotated[CurrentUserSchema, Depends(get_current_user)],
     id: int = Path(..., gt=0),
-    current_user: CurrentUserSchema = Depends(get_current_user)
 ) -> SummarySchema:
     summary = await crud.get(id)
     if not summary:
@@ -52,7 +53,7 @@ async def read_summary(
 
 @router.get("/", response_model=list[SummarySchema])
 async def read_all_summaries(
-    current_user: CurrentUserSchema = Depends(get_current_user)
+    current_user: Annotated[CurrentUserSchema, Depends(get_current_user)],
 ) -> list[SummarySchema]:
     # get_all will filter by user unless they're admin
     return await crud.get_all(current_user)
@@ -60,8 +61,8 @@ async def read_all_summaries(
 
 @router.delete("/{id}/", response_model=SummaryResponseSchema)
 async def delete_summary(
+    current_user: Annotated[CurrentUserSchema, Depends(get_current_user)],
     id: int = Path(..., gt=0),
-    current_user: CurrentUserSchema = Depends(get_current_user)
 ) -> SummaryResponseSchema:
     summary = await crud.get(id)
 
@@ -79,9 +80,9 @@ async def delete_summary(
 
 @router.put("/{id}/", response_model=SummarySchema)
 async def update_summary(
+    current_user: Annotated[CurrentUserSchema, Depends(get_current_user)],
     payload: SummaryUpdatePayloadSchema,
     id: int = Path(..., gt=0),
-    current_user: CurrentUserSchema = Depends(get_current_user)
 ) -> SummarySchema:
     # Check if summary exists and user has access
     existing_summary = await crud.get(id)
