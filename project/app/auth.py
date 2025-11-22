@@ -4,7 +4,7 @@ Supports both mock authentication (development) and Azure JWT (production).
 """
 
 import logging
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any
 
 import httpx
@@ -43,21 +43,22 @@ class AzureJWTAuth:
         if not self.settings.azure_tenant_id:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Azure tenant ID not configured"
+                detail="Azure tenant ID not configured",
             )
         return f"https://login.microsoftonline.com/{self.settings.azure_tenant_id}/discovery/v2.0/keys"
 
     async def get_jwks(self) -> dict[str, Any]:
         """Fetch JWKS from Azure with TTL-based caching."""
-        now = datetime.utcnow()
-        
+        now = datetime.now(UTC)
         # Check if cache is valid
-        if (self._jwks_cache is not None and 
-            self._jwks_cache_expiry is not None and 
-            now < self._jwks_cache_expiry):
+        if (
+            self._jwks_cache is not None
+            and self._jwks_cache_expiry is not None
+            and now < self._jwks_cache_expiry
+        ):
             logger.debug("Using cached JWKS")
             return self._jwks_cache
-            
+
         logger.info("Fetching JWKS from Azure")
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
@@ -71,13 +72,15 @@ class AzureJWTAuth:
             logger.error(f"Failed to fetch JWKS: {e}")
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Unable to fetch Azure JWKS"
+                detail="Unable to fetch Azure JWKS",
             ) from e
         except httpx.HTTPStatusError as e:
-            logger.error(f"Azure JWKS endpoint returned error: {e.response.status_code}")
+            logger.error(
+                f"Azure JWKS endpoint returned error: {e.response.status_code}"
+            )
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Azure authentication service unavailable"
+                detail="Azure authentication service unavailable",
             ) from e
 
     def get_public_key(self, token_header: dict[str, Any], jwks: dict[str, Any]) -> str:
@@ -176,50 +179,37 @@ class AzureJWTAuth:
         roles = claims.get("roles", [])
         # Check for groups (security groups in Azure AD)
         groups = claims.get("groups", [])
-        
+
         logger.debug(f"Azure roles: {roles}, groups: {groups}")
-        
-        # Priority order: Admin > Writer > Reader
-        # App Roles (highest priority)
-        if any(role.lower() in ["admin", "administrator", "fastapi.admin"] for role in roles):
-            logger.info(f"User assigned admin role via app roles: {roles}")
-            return UserRole.ADMIN
-        if any(role.lower() in ["writer", "editor", "fastapi.writer"] for role in roles):
-            logger.info(f"User assigned writer role via app roles: {roles}")
-            return UserRole.WRITER
-        if any(role.lower() in ["reader", "viewer", "fastapi.reader"] for role in roles):
-            logger.info(f"User assigned reader role via app roles: {roles}")
-            return UserRole.READER
-            
-        # Group-based mapping (can be configured based on your Azure AD setup)
-        # You can replace these group IDs with your actual Azure AD group IDs
-        admin_groups = [
-            "fastapi-admins",
-            "system-administrators", 
-            # Add your Azure AD group IDs here
+
+        # Define role mappings
+        admin_roles = ["admin", "administrator", "fastapi.admin"]
+        writer_roles = ["writer", "editor", "fastapi.writer"]
+        reader_roles = ["reader", "viewer", "fastapi.reader"]
+
+        admin_groups = ["fastapi-admins", "system-administrators"]
+        writer_groups = ["fastapi-writers", "content-editors"]
+        reader_groups = ["fastapi-readers", "content-viewers"]
+
+        # Check role mappings in priority order: Admin > Writer > Reader
+        role_checks = [
+            (UserRole.ADMIN, admin_roles, admin_groups, "admin"),
+            (UserRole.WRITER, writer_roles, writer_groups, "writer"),
+            (UserRole.READER, reader_roles, reader_groups, "reader"),
         ]
-        writer_groups = [
-            "fastapi-writers",
-            "content-editors",
-            # Add your Azure AD group IDs here
-        ]
-        reader_groups = [
-            "fastapi-readers",
-            "content-viewers",
-            # Add your Azure AD group IDs here
-        ]
-        
-        # Check group membership
-        if any(group in admin_groups for group in groups):
-            logger.info(f"User assigned admin role via group membership: {groups}")
-            return UserRole.ADMIN
-        if any(group in writer_groups for group in groups):
-            logger.info(f"User assigned writer role via group membership: {groups}")
-            return UserRole.WRITER
-        if any(group in reader_groups for group in groups):
-            logger.info(f"User assigned reader role via group membership: {groups}")
-            return UserRole.READER
-            
+
+        for user_role, role_list, group_list, role_name in role_checks:
+            # Check app roles first (highest priority)
+            if any(role.lower() in role_list for role in roles):
+                logger.info(f"User assigned {role_name} role via app roles: {roles}")
+                return user_role
+            # Check group membership
+            if any(group in group_list for group in groups):
+                logger.info(
+                    f"User assigned {role_name} role via group membership: {groups}"
+                )
+                return user_role
+
         # Default role for authenticated users
         logger.info("User assigned default reader role")
         return UserRole.READER

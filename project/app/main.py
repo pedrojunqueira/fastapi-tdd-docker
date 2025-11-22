@@ -4,6 +4,7 @@ from fastapi import FastAPI
 
 from app.api import ping, summaries
 from app.api.auth_validation import router as auth_router
+from app.api.auth_testing import router as auth_testing_router
 from app.db import init_db
 
 log = logging.getLogger("uvicorn")
@@ -16,6 +17,7 @@ def create_application() -> FastAPI:
         summaries.router, prefix="/summaries", tags=["summaries"]
     )
     application.include_router(auth_router)
+    application.include_router(auth_testing_router)
 
     return application
 

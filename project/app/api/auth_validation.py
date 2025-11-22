@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
 
@@ -15,6 +15,7 @@ security = HTTPBearer()
 
 class TokenValidationResponse(BaseModel):
     """Response model for token validation."""
+
     valid: bool
     user_id: str | None = None
     email: str | None = None
@@ -25,6 +26,7 @@ class TokenValidationResponse(BaseModel):
 
 class JWKSResponse(BaseModel):
     """Response model for JWKS endpoint."""
+
     keys: list[dict[str, Any]]
     cached: bool
     cache_expires: str | None = None
@@ -35,11 +37,11 @@ async def get_jwks():
     """Get current JWKS (JSON Web Key Set) from Azure."""
     settings = get_settings()
 
-    # Only allow in development or if explicitly enabled
-    if not settings.use_mock_auth and not settings.debug:
+    # Allow in development environment
+    if settings.environment == "prod":
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Endpoint not available in production"
+            detail="Endpoint not available in production",
         )
 
     azure_auth = AzureJWTAuth()
@@ -49,29 +51,32 @@ async def get_jwks():
         return JWKSResponse(
             keys=jwks_data.get("keys", []),
             cached=azure_auth._jwks_cache is not None,
-            cache_expires=azure_auth._jwks_cache_expiry.isoformat() if azure_auth._jwks_cache_expiry else None
+            cache_expires=azure_auth._jwks_cache_expiry.isoformat()
+            if azure_auth._jwks_cache_expiry
+            else None,
         )
-    except HTTPException:
-        raise
+    except HTTPException as e:
+        raise e
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error fetching JWKS: {e!s}"
+            detail=f"Error fetching JWKS: {e!s}",
         ) from e
 
 
 @router.post("/validate-token", response_model=TokenValidationResponse)
-async def validate_azure_token(
-    credentials: HTTPAuthorizationCredentials = Depends(security)
-):
+async def validate_azure_token():
     """Validate an Azure JWT token and return user information."""
+    from fastapi import Depends
+
+    credentials: HTTPAuthorizationCredentials = Depends(security)
     settings = get_settings()
 
-    # Only allow in development or if explicitly enabled
-    if not settings.use_mock_auth and not settings.debug:
+    # Allow in development environment
+    if settings.environment == "prod":
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Endpoint not available in production"
+            detail="Endpoint not available in production",
         )
 
     azure_auth = AzureJWTAuth()
@@ -85,33 +90,29 @@ async def validate_azure_token(
             user_id=claims.get("sub"),
             email=claims.get("email"),
             roles=claims.get("roles", []) + claims.get("groups", []),
-            claims=claims
+            claims=claims,
         )
 
     except HTTPException as e:
         return TokenValidationResponse(
-            valid=False,
-            error=f"HTTP {e.status_code}: {e.detail}"
+            valid=False, error=f"HTTP {e.status_code}: {e.detail}"
         )
     except Exception as e:
-        return TokenValidationResponse(
-            valid=False,
-            error=f"Validation error: {e!s}"
-        )
+        return TokenValidationResponse(valid=False, error=f"Validation error: {e!s}")
 
 
 @router.get("/health")
 async def auth_health_check():
     """Health check for authentication system."""
     settings = get_settings()
-    
+
     health_info = {
         "status": "healthy",
         "auth_mode": "mock" if settings.use_mock_auth else "azure_jwt",
         "azure_configured": bool(settings.azure_tenant_id and settings.azure_client_id),
-        "timestamp": "2024-11-21T00:00:00Z"
+        "timestamp": "2024-11-21T00:00:00Z",
     }
-    
+
     # Test Azure JWT configuration if not in mock mode
     if not settings.use_mock_auth:
         try:
@@ -122,5 +123,5 @@ async def auth_health_check():
         except Exception as e:
             health_info["status"] = "degraded"
             health_info["azure_error"] = str(e)
-    
+
     return health_info

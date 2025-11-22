@@ -50,8 +50,10 @@ def test_create_summary_with_custom_summary(test_app_with_db):
     assert response_data["summary"] == "Custom article summary"  # Custom value
 
 
-def test_create_summaries_invalid_json(test_app):
-    response = test_app.post("/summaries/", data=json.dumps({}), headers=WRITER_HEADERS)
+def test_create_summaries_invalid_json(test_app_with_db):
+    response = test_app_with_db.post(
+        "/summaries/", data=json.dumps({}), headers=WRITER_HEADERS
+    )
     assert response.status_code == 422
     assert response.json() == {
         "detail": [
@@ -64,7 +66,9 @@ def test_create_summaries_invalid_json(test_app):
         ]
     }
 
-    response = test_app.post("/summaries/", data=json.dumps({"url": "invalid://url"}))
+    response = test_app_with_db.post(
+        "/summaries/", data=json.dumps({"url": "invalid://url"}), headers=WRITER_HEADERS
+    )
     assert response.status_code == 422
     assert (
         response.json()["detail"][0]["msg"] == "URL scheme should be 'http' or 'https'"
@@ -238,8 +242,8 @@ def test_update_summary_invalid(
     assert response.json()["detail"] == detail
 
 
-def test_update_summary_invalid_url(test_app):
-    response = test_app.put(
+def test_update_summary_invalid_url(test_app_with_db):
+    response = test_app_with_db.put(
         "/summaries/1/",
         data=json.dumps({"url": "invalid://url", "summary": "updated!"}),
         headers=ADMIN_HEADERS,

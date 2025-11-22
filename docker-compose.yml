@@ -11,6 +11,12 @@ services:
       - TESTING=0
       - DATABASE_URL=postgres://postgres:postgres@web-db:5432/web_dev
       - DATABASE_TEST_URL=postgres://postgres:postgres@web-db:5432/web_test
+      # Azure JWT Configuration
+      - AZURE_TENANT_ID=078c6c18-7434-4931-81cd-7b9603fda5a2
+      - AZURE_CLIENT_ID=70050862-5a60-4865-b3b5-4bbf913e4ca9
+      - JWT_ALGORITHM=RS256
+      - JWT_AUDIENCE=70050862-5a60-4865-b3b5-4bbf913e4ca9
+      - USE_MOCK_AUTH=true
     depends_on:
       - web-db
 
