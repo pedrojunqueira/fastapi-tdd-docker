@@ -3,7 +3,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Path
 
 from app.api import crud
-from app.auth import get_current_user
+from app.auth import get_current_user_from_azure
 from app.models.pydantic import (
     CurrentUserSchema,
     SummaryPayloadSchema,
@@ -18,7 +18,7 @@ router = APIRouter()
 @router.post("/", response_model=SummarySchema, status_code=201)
 async def create_summary(
     payload: SummaryPayloadSchema,
-    current_user: Annotated[CurrentUserSchema, Depends(get_current_user)],
+    current_user: Annotated[CurrentUserSchema, Depends(get_current_user_from_azure)],
 ) -> SummarySchema:
     # Only writers and admins can create summaries
     if current_user.role not in ["writer", "admin"]:
@@ -37,7 +37,7 @@ async def create_summary(
 
 @router.get("/{id}/", response_model=SummarySchema)
 async def read_summary(
-    current_user: Annotated[CurrentUserSchema, Depends(get_current_user)],
+    current_user: Annotated[CurrentUserSchema, Depends(get_current_user_from_azure)],
     id: int = Path(..., gt=0),
 ) -> SummarySchema:
     summary = await crud.get(id)
@@ -53,7 +53,7 @@ async def read_summary(
 
 @router.get("/", response_model=list[SummarySchema])
 async def read_all_summaries(
-    current_user: Annotated[CurrentUserSchema, Depends(get_current_user)],
+    current_user: Annotated[CurrentUserSchema, Depends(get_current_user_from_azure)],
 ) -> list[SummarySchema]:
     # get_all will filter by user unless they're admin
     return await crud.get_all(current_user)
@@ -61,7 +61,7 @@ async def read_all_summaries(
 
 @router.delete("/{id}/", response_model=SummaryResponseSchema)
 async def delete_summary(
-    current_user: Annotated[CurrentUserSchema, Depends(get_current_user)],
+    current_user: Annotated[CurrentUserSchema, Depends(get_current_user_from_azure)],
     id: int = Path(..., gt=0),
 ) -> SummaryResponseSchema:
     summary = await crud.get(id)
@@ -80,7 +80,7 @@ async def delete_summary(
 
 @router.put("/{id}/", response_model=SummarySchema)
 async def update_summary(
-    current_user: Annotated[CurrentUserSchema, Depends(get_current_user)],
+    current_user: Annotated[CurrentUserSchema, Depends(get_current_user_from_azure)],
     payload: SummaryUpdatePayloadSchema,
     id: int = Path(..., gt=0),
 ) -> SummarySchema:

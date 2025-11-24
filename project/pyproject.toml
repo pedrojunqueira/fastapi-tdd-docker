@@ -13,9 +13,7 @@ dependencies = [
     "aerich[toml]==0.8.2",
     "httpx==0.28.1",
     "gunicorn==22.0.0",
-    "pyjwt[crypto]==2.10.0",
-    "cryptography==44.0.0",
-    "python-jose[cryptography]==3.3.0",
+    "fastapi-azure-auth>=4.3.4",
 ]
 
 [project.optional-dependencies]

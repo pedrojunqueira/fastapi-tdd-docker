@@ -14,8 +14,8 @@ class User(models.Model):
     id = fields.IntField(pk=True)
     azure_oid = fields.CharField(
         max_length=255, null=True, unique=True
-    )  # For future Azure integration
-    email = fields.CharField(max_length=255, unique=True)
+    )  # Azure Object ID - unique identifier
+    email = fields.CharField(max_length=255)  # Email can change, not unique anymore
     role = fields.CharEnumField(UserRole, default=UserRole.READER)
     created_at = fields.DatetimeField(auto_now_add=True)
     last_login = fields.DatetimeField(null=True)
