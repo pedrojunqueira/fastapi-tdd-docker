@@ -173,26 +173,31 @@ def _map_azure_roles_to_app_roles(claims: dict) -> UserRole:
 
 ### User still has wrong role?
 
+- The role is synced from Azure on **every login** - just logout and login again
 - Check the application logs for role mapping debug info
-- Verify the `roles` claim in the JWT token
+- Verify the `roles` claim in the JWT token (use https://jwt.ms/)
 - Make sure the role value matches exactly (`admin`, `writer`, `reader`)
 
 ### 403 Forbidden errors?
 
-- Check user's role in database: `docker compose exec web-db psql -U postgres -d web_dev -c "SELECT email, role FROM user;"`
-- The role is set when user first authenticates - may need to delete user from DB and re-authenticate to pick up new Azure role
+- Check user's current role in database:
+  ```bash
+  docker compose exec web-db psql -U postgres -d web_dev -c 'SELECT email, role FROM "user";'
+  ```
+- Verify your Azure role assignment in Enterprise Applications
+- Logout and login again to refresh the role from Azure
 
-### Force role update for existing user:
+### View user roles in database:
 
-```sql
--- Connect to database
+```bash
+# Connect to database
 docker compose exec web-db psql -U postgres -d web_dev
 
--- Update user role manually
-UPDATE "user" SET role = 'admin' WHERE email = 'your.email@example.com';
+# Check all user roles
+SELECT email, role, azure_oid FROM "user" ORDER BY id;
 
--- Check updated roles
-SELECT email, role FROM "user";
+# Exit
+\q
 ```
 
 ## Testing Checklist

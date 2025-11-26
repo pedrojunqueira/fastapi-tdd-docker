@@ -9,7 +9,15 @@ A FastAPI application with PostgreSQL database, containerized with Docker and or
 
 ## 🚀 Latest Updates
 
-**Azure Deployment Ready**: This project now includes full Azure deployment support using Azure Developer CLI (azd):
+**Azure AD Authentication & Authorization**: This project now includes enterprise-grade authentication using Azure Entra ID (formerly Azure AD):
+
+- ✅ **OAuth2 Authorization Code Flow with PKCE** via Swagger UI
+- ✅ **Role-based access control** with Admin, Writer, and Reader roles
+- ✅ **Azure App Roles integration** - roles defined in Azure, enforced in app
+- ✅ **Automatic user provisioning** - users created on first login
+- ✅ **Role sync** - roles updated from Azure token on each login
+
+**Azure Deployment Ready**: This project includes full Azure deployment support using Azure Developer CLI (azd):
 
 - ✅ **One-command deployment** to Azure Container Apps
 - ✅ **Automatic database migrations** in Azure environment
@@ -28,6 +36,8 @@ fastapi-tdd-docker/
 │       ├── ci-cd.yml         # Main CI/CD pipeline (test, lint, deploy)
 │       └── pr-validation.yml # Pull request validation workflow
 ├── docker-compose.yml          # Docker Compose configuration
+├── AZURE_AUTH_GUIDE.md        # Azure AD authentication setup guide
+├── AZURE_ROLES_SETUP.md       # Azure AD roles configuration guide
 ├── scripts/                    # Development and utility scripts
 │   ├── lint.sh               # Ruff linting and formatting script
 │   └── setup-github-actions.sh # Azure service principal setup helper
@@ -48,24 +58,29 @@ fastapi-tdd-docker/
 │   │   └── test_ping.py     # Example test file
 │   └── app/                 # FastAPI application
 │       ├── __init__.py
-│       ├── main.py          # Main application file
-│       ├── config.py        # Configuration settings
+│       ├── main.py          # Main application file with OAuth2 configuration
+│       ├── config.py        # Configuration settings including Azure AD
+│       ├── auth.py          # Authentication and authorization logic
+│       ├── azure.py         # Azure AD scheme initialization
 │       ├── db.py            # Tortoise ORM configuration
 │       ├── api/             # API routes and endpoints
 │       │   ├── __init__.py
 │       │   ├── ping.py      # Health check endpoint
-│       │   ├── summaries.py # Summaries CRUD endpoints
+│       │   ├── summaries.py # Summaries CRUD endpoints (role-protected)
 │       │   └── crud.py      # Database operations
 │       └── models/          # Data models
 │           ├── __init__.py
 │           ├── pydantic.py  # Pydantic schemas for API
-│           └── tortoise.py  # Tortoise ORM models
+│           └── tortoise.py  # Tortoise ORM models (User, TextSummary)
 └── README.md                # This file
 ```
 
 ## Features
 
 - **FastAPI**: Modern, fast web framework for building APIs with Python
+- **Azure AD Authentication**: Enterprise-grade OAuth2 authentication using Azure Entra ID (formerly Azure AD)
+- **Role-Based Access Control**: Admin, Writer, and Reader roles with Azure App Roles integration
+- **OAuth2 PKCE Flow**: Secure authentication flow in Swagger UI with PKCE support
 - **UV Package Manager**: Ultra-fast Python package installation and dependency resolution (10-100x faster than pip)
 - **Modular API Structure**: Organized with APIRouter for scalable endpoint management
 - **CRUD Operations**: Full Create, Read, Update, Delete operations for summaries
@@ -86,6 +101,8 @@ fastapi-tdd-docker/
 ## Technology Stack
 
 - **Backend**: FastAPI (Python 3.13)
+- **Authentication**: Azure Entra ID (Azure AD) with fastapi-azure-auth library
+- **Authorization**: Role-based access control with Azure App Roles
 - **Package Manager**: UV (ultra-fast Python package installer and resolver)
 - **Database**: PostgreSQL 17
 - **ORM**: Tortoise ORM with async support
@@ -689,71 +706,54 @@ docker-compose exec -T web-db pg_restore -U postgres -d web_dev backup.dump
 
 ### Authentication
 
-This application uses role-based authentication with mock tokens for development and testing. All endpoints except `/ping` require authentication.
+This application uses **Azure Entra ID (Azure AD)** for enterprise-grade OAuth2 authentication with role-based access control. All endpoints except `/ping` require authentication.
+
+#### Azure AD Configuration
+
+The application requires two Azure AD app registrations:
+
+1. **Backend API App** (`auth-fastapi-tdd`): Defines the API and its app roles
+2. **OpenAPI Client App**: Enables OAuth2 flow in Swagger UI
+
+See [AZURE_AUTH_GUIDE.md](AZURE_AUTH_GUIDE.md) for complete setup instructions.
 
 #### Authentication in Swagger UI
 
 1. **Open Swagger UI**: http://localhost:8004/docs
 2. **Click "Authorize"** button (green lock icon in top-right)
-3. **Enter Bearer Token** in the format: `mock:email:role`
-4. **Click "Authorize"** and then **"Close"**
+3. **Check the scope checkbox** (`api://.../.default` or `user_impersonation`)
+4. **Click "Authorize"** - you'll be redirected to Microsoft login
+5. **Sign in** with your Azure AD credentials
+6. **Grant consent** if prompted
+7. You're now authenticated and can use the protected endpoints
 
-#### Available Mock Tokens
+#### Role-Based Access Control
 
-**🔴 Admin User (Full Access)**
+The application uses Azure AD App Roles for authorization:
 
+| Role       | GET (Read)       | POST (Create) | PUT (Update) | DELETE      |
+| ---------- | ---------------- | ------------- | ------------ | ----------- |
+| **Admin**  | ✅ All summaries | ✅            | ✅ Any       | ✅ Any      |
+| **Writer** | ✅ Own only      | ✅            | ✅ Own only  | ✅ Own only |
+| **Reader** | ✅ Own only      | ❌ 403        | ❌ 403       | ❌ 403      |
+
+#### Setting Up Roles in Azure
+
+1. Add app roles (Admin, Writer, Reader) to your Backend API app registration
+2. Assign users to roles via Enterprise Applications → Users and groups
+
+See [AZURE_ROLES_SETUP.md](AZURE_ROLES_SETUP.md) for detailed step-by-step instructions.
+
+#### Environment Variables for Azure AD
+
+Configure these in `docker-compose.yml`:
+
+```yaml
+environment:
+  - TENANT_ID=your-azure-tenant-id
+  - APP_CLIENT_ID=your-backend-api-client-id
+  - OPENAPI_CLIENT_ID=your-openapi-client-id
 ```
-mock:admin@test.com:admin
-```
-
-- **Permissions**: Can create, read, update, delete ALL summaries
-- **Use case**: Full administrative access
-
-**✏️ Writer User (Create + Own Content)**
-
-```
-mock:writer@test.com:writer
-```
-
-- **Permissions**: Can create summaries, can only read/update/delete their OWN summaries
-- **Use case**: Content creation with ownership restrictions
-
-**👁️ Reader User (Read Only)**
-
-```
-mock:reader@test.com:reader
-```
-
-- **Permissions**: Can only read summaries (no create/update/delete)
-- **Use case**: Read-only access
-
-#### Testing with cURL
-
-```bash
-# Admin access
-curl -H "Authorization: Bearer mock:admin@test.com:admin" \
-     http://localhost:8004/summaries/
-
-# Writer access
-curl -H "Authorization: Bearer mock:writer@test.com:writer" \
-     http://localhost:8004/summaries/
-
-# Reader access
-curl -H "Authorization: Bearer mock:reader@test.com:reader" \
-     http://localhost:8004/summaries/
-```
-
-#### Custom Users
-
-You can create custom users on the fly:
-
-```
-mock:john.doe@company.com:writer
-mock:jane.admin@company.com:admin
-mock:viewer@example.org:reader
-```
-
-The system will automatically create these users in the database with the specified roles.
 
 ### Health Check
 
