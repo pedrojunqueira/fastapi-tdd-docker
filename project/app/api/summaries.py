@@ -3,7 +3,10 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Path
 
 from app.api import crud
-from app.auth import get_current_user_from_azure
+from app.auth import (
+    get_authenticated_user,
+    get_writer_or_admin_user,
+)
 from app.models.pydantic import (
     CurrentUserSchema,
     SummaryPayloadSchema,
@@ -18,14 +21,9 @@ router = APIRouter()
 @router.post("/", response_model=SummarySchema, status_code=201)
 async def create_summary(
     payload: SummaryPayloadSchema,
-    current_user: Annotated[CurrentUserSchema, Depends(get_current_user_from_azure)],
+    current_user: Annotated[CurrentUserSchema, Depends(get_writer_or_admin_user)],
 ) -> SummarySchema:
-    # Only writers and admins can create summaries
-    if current_user.role not in ["writer", "admin"]:
-        raise HTTPException(
-            status_code=403, detail="Access denied. Writers and admins only."
-        )
-
+    """Create a new summary. Requires writer or admin role."""
     summary_id = await crud.post(payload, current_user)
 
     # Return the complete created summary from database
@@ -37,9 +35,10 @@ async def create_summary(
 
 @router.get("/{id}/", response_model=SummarySchema)
 async def read_summary(
-    current_user: Annotated[CurrentUserSchema, Depends(get_current_user_from_azure)],
+    current_user: Annotated[CurrentUserSchema, Depends(get_authenticated_user)],
     id: int = Path(..., gt=0),
 ) -> SummarySchema:
+    """Get a single summary by ID. All authenticated users can read."""
     summary = await crud.get(id)
     if not summary:
         raise HTTPException(status_code=404, detail="Summary not found")
@@ -53,17 +52,18 @@ async def read_summary(
 
 @router.get("/", response_model=list[SummarySchema])
 async def read_all_summaries(
-    current_user: Annotated[CurrentUserSchema, Depends(get_current_user_from_azure)],
+    current_user: Annotated[CurrentUserSchema, Depends(get_authenticated_user)],
 ) -> list[SummarySchema]:
-    # get_all will filter by user unless they're admin
+    """Get all summaries. Readers see their own, admins see all."""
     return await crud.get_all(current_user)
 
 
 @router.delete("/{id}/", response_model=SummaryResponseSchema)
 async def delete_summary(
-    current_user: Annotated[CurrentUserSchema, Depends(get_current_user_from_azure)],
+    current_user: Annotated[CurrentUserSchema, Depends(get_writer_or_admin_user)],
     id: int = Path(..., gt=0),
 ) -> SummaryResponseSchema:
+    """Delete a summary. Requires writer or admin role."""
     summary = await crud.get(id)
 
     if not summary:
@@ -80,10 +80,11 @@ async def delete_summary(
 
 @router.put("/{id}/", response_model=SummarySchema)
 async def update_summary(
-    current_user: Annotated[CurrentUserSchema, Depends(get_current_user_from_azure)],
+    current_user: Annotated[CurrentUserSchema, Depends(get_writer_or_admin_user)],
     payload: SummaryUpdatePayloadSchema,
     id: int = Path(..., gt=0),
 ) -> SummarySchema:
+    """Update a summary. Requires writer or admin role."""
     # Check if summary exists and user has access
     existing_summary = await crud.get(id)
     if not existing_summary:

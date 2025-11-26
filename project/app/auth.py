@@ -44,14 +44,22 @@ async def get_current_user_from_azure(
         azure_oid=azure_oid, defaults={"email": email, "role": user_role}
     )
 
-    # Update email if changed
-    if not created and user.email != email:
-        user.email = email
-        await user.save()
+    # Always update email and role from Azure token (role might have changed)
+    if not created:
+        needs_save = False
+        if user.email != email:
+            user.email = email
+            needs_save = True
+        if user.role != user_role:
+            logger.info(f"Updating user role from {user.role} to {user_role}")
+            user.role = user_role
+            needs_save = True
+        if needs_save:
+            await user.save()
 
     logger.info(f"User authenticated: {email} (role: {user_role.value})")
 
-    return CurrentUserSchema(id=user.id, email=user.email, role=user.role.value)
+    return CurrentUserSchema(id=user.id, email=user.email, role=user_role.value)
 
 
 def _map_azure_roles_to_app_roles(claims: dict) -> UserRole:
@@ -59,7 +67,7 @@ def _map_azure_roles_to_app_roles(claims: dict) -> UserRole:
     roles = claims.get("roles", [])
     groups = claims.get("groups", [])
 
-    logger.debug(f"Azure roles: {roles}, groups: {groups}")
+    logger.debug(f"Azure token roles: {roles}, groups: {groups}")
 
     # Define role mappings
     admin_roles = ["admin", "administrator", "fastapi.admin"]
@@ -140,3 +148,39 @@ async def require_ownership_or_admin(
     raise HTTPException(
         status_code=403, detail="Access denied. You can only access your own resources."
     )
+
+
+# Role-based dependency functions for cleaner endpoint definitions
+
+
+async def get_admin_user(
+    current_user: Annotated[CurrentUserSchema, Security(azure_scheme)],
+) -> CurrentUserSchema:
+    """Dependency that requires admin role."""
+    user = await get_current_user_from_azure(current_user)
+    if user.role != "admin":
+        raise HTTPException(
+            status_code=403,
+            detail="Access denied. Admin role required.",
+        )
+    return user
+
+
+async def get_writer_or_admin_user(
+    current_user: Annotated[CurrentUserSchema, Security(azure_scheme)],
+) -> CurrentUserSchema:
+    """Dependency that requires writer or admin role."""
+    user = await get_current_user_from_azure(current_user)
+    if user.role not in ["writer", "admin"]:
+        raise HTTPException(
+            status_code=403,
+            detail="Access denied. Writer or Admin role required.",
+        )
+    return user
+
+
+async def get_authenticated_user(
+    current_user: Annotated[CurrentUserSchema, Security(azure_scheme)],
+) -> CurrentUserSchema:
+    """Dependency that requires any authenticated user (reader, writer, or admin)."""
+    return await get_current_user_from_azure(current_user)
