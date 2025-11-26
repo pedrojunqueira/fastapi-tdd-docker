@@ -1,11 +1,16 @@
 """
 Simplified authentication using fastapi-azure-auth library.
+
+This module provides:
+- Azure AD authentication via fastapi-azure-auth
+- Role-based authorization (admin, writer, reader)
+- Testable dependency injection pattern
 """
 
 import logging
 from typing import Annotated
 
-from fastapi import HTTPException, Security
+from fastapi import Depends, HTTPException, Security
 
 from app.azure import azure_scheme
 from app.models.pydantic import CurrentUserSchema
@@ -14,18 +19,30 @@ from app.models.tortoise import User, UserRole
 logger = logging.getLogger(__name__)
 
 
-async def get_current_user_from_azure(
+async def get_azure_user(
     azure_user: Annotated[object, Security(azure_scheme)],
+) -> object:
+    """
+    Get the raw Azure user from the token.
+    This is a separate dependency to allow easy mocking in tests.
+    """
+    return azure_user
+
+
+async def get_current_user_from_azure(
+    azure_user: Annotated[object, Depends(get_azure_user)],
 ) -> CurrentUserSchema:
     """
     Get current user from Azure authentication.
-    The azure_user parameter will be injected by azure_scheme via Security dependency.
+    The azure_user parameter will be injected by get_azure_user dependency.
     """
     if azure_user is None:
         # This should not happen in production, only if scheme not properly configured
         raise HTTPException(
             status_code=500, detail="Authentication scheme not configured"
-        )  # Extract claims from Azure token
+        )
+
+    # Extract claims from Azure token
     claims = azure_user.claims
 
     email = claims.get("preferred_username") or claims.get("email") or claims.get("upn")
@@ -154,33 +171,31 @@ async def require_ownership_or_admin(
 
 
 async def get_admin_user(
-    current_user: Annotated[CurrentUserSchema, Security(azure_scheme)],
+    current_user: Annotated[CurrentUserSchema, Depends(get_current_user_from_azure)],
 ) -> CurrentUserSchema:
     """Dependency that requires admin role."""
-    user = await get_current_user_from_azure(current_user)
-    if user.role != "admin":
+    if current_user.role != "admin":
         raise HTTPException(
             status_code=403,
             detail="Access denied. Admin role required.",
         )
-    return user
+    return current_user
 
 
 async def get_writer_or_admin_user(
-    current_user: Annotated[CurrentUserSchema, Security(azure_scheme)],
+    current_user: Annotated[CurrentUserSchema, Depends(get_current_user_from_azure)],
 ) -> CurrentUserSchema:
     """Dependency that requires writer or admin role."""
-    user = await get_current_user_from_azure(current_user)
-    if user.role not in ["writer", "admin"]:
+    if current_user.role not in ["writer", "admin"]:
         raise HTTPException(
             status_code=403,
             detail="Access denied. Writer or Admin role required.",
         )
-    return user
+    return current_user
 
 
 async def get_authenticated_user(
-    current_user: Annotated[CurrentUserSchema, Security(azure_scheme)],
+    current_user: Annotated[CurrentUserSchema, Depends(get_current_user_from_azure)],
 ) -> CurrentUserSchema:
     """Dependency that requires any authenticated user (reader, writer, or admin)."""
-    return await get_current_user_from_azure(current_user)
+    return current_user

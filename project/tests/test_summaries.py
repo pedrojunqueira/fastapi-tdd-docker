@@ -1,196 +1,167 @@
-import json
-import os
-
-import pytest
-from starlette.testclient import TestClient
-from tortoise.contrib.fastapi import register_tortoise
-
-from app.auth import get_current_user_from_azure
-from app.config import Settings, get_settings
-from app.main import create_application
-from app.models.pydantic import CurrentUserSchema
-from app.models.tortoise import User, UserRole
+"""
+Tests for summaries API endpoints with Azure AD authentication.
+"""
 
 
-def get_settings_override():
-    return Settings(testing=1, database_url=os.environ.get("DATABASE_TEST_URL"))
+class TestSummariesWithWriter:
+    """Test summary CRUD operations with writer role."""
 
-
-def create_mock_user_dependency(email: str, role: str):
-    """Create a mock user dependency for testing."""
-
-    async def _mock_user():
-        role_enum = UserRole(role)
-        oid = f"test-oid-{email}"
-        user, _created = await User.get_or_create(
-            azure_oid=oid, defaults={"email": email, "role": role_enum}
+    def test_create_summary(self, test_app_with_writer):
+        """Test that writer can create summaries."""
+        response = test_app_with_writer.post(
+            "/summaries/",
+            json={"url": "https://foo.bar"},
         )
-        return CurrentUserSchema(id=user.id, email=user.email, role=user.role.value)
+        assert response.status_code == 201
+        assert response.json()["url"] == "https://foo.bar/"
 
-    return _mock_user
+    def test_create_summary_with_custom_summary(self, test_app_with_writer):
+        """Test creating a summary with a custom summary provided."""
+        response = test_app_with_writer.post(
+            "/summaries/",
+            json={
+                "url": "https://example.com/article",
+                "summary": "Custom article summary",
+            },
+        )
+        assert response.status_code == 201
+        response_data = response.json()
+        assert response_data["url"] == "https://example.com/article"
+        assert response_data["summary"] == "Custom article summary"
 
+    def test_create_summaries_invalid_json(self, test_app_with_writer):
+        """Test validation for missing required fields."""
+        response = test_app_with_writer.post("/summaries/", json={})
+        assert response.status_code == 422
+        assert response.json()["detail"][0]["loc"] == ["body", "url"]
 
-@pytest.fixture
-def test_app_with_writer():
-    """Test app with writer user."""
-    from app.main import azure_scheme
+    def test_read_summary(self, test_app_with_writer):
+        """Test writer can read their own summary."""
+        response = test_app_with_writer.post(
+            "/summaries/",
+            json={"url": "https://foo.bar"},
+        )
+        summary_id = response.json()["id"]
 
-    # Mock Azure config loading
-    async def mock_load_config():
-        pass
+        response = test_app_with_writer.get(f"/summaries/{summary_id}/")
+        assert response.status_code == 200
 
-    azure_scheme.openid_config.load_config = mock_load_config
+        response_dict = response.json()
+        assert response_dict["id"] == summary_id
+        assert response_dict["url"] == "https://foo.bar/"
 
-    app = create_application()
-    app.dependency_overrides[get_settings] = get_settings_override
-    app.dependency_overrides[get_current_user_from_azure] = create_mock_user_dependency(
-        "writer@test.com", "writer"
-    )
-    register_tortoise(
-        app,
-        db_url=os.environ.get("DATABASE_TEST_URL"),
-        modules={"models": ["app.models.tortoise"]},
-        generate_schemas=True,
-        add_exception_handlers=True,
-    )
-    with TestClient(app) as client:
-        yield client
+    def test_remove_summary(self, test_app_with_writer):
+        """Test writer can delete their own summary."""
+        response = test_app_with_writer.post(
+            "/summaries/",
+            json={"url": "https://foo.bar"},
+        )
+        summary_id = response.json()["id"]
 
+        response = test_app_with_writer.delete(f"/summaries/{summary_id}/")
+        assert response.status_code == 200
+        assert response.json()["url"] == "https://foo.bar/"
 
-@pytest.fixture
-def test_app_with_admin():
-    """Test app with admin user."""
-    from app.main import azure_scheme
+    def test_update_summary(self, test_app_with_writer):
+        """Test writer can update their own summary."""
+        response = test_app_with_writer.post(
+            "/summaries/",
+            json={"url": "https://foo.bar"},
+        )
+        summary_id = response.json()["id"]
 
-    # Mock Azure config loading
-    async def mock_load_config():
-        pass
+        response = test_app_with_writer.put(
+            f"/summaries/{summary_id}/",
+            json={"url": "https://foo.bar", "summary": "updated!"},
+        )
+        assert response.status_code == 200
 
-    azure_scheme.openid_config.load_config = mock_load_config
+        response_dict = response.json()
+        assert response_dict["id"] == summary_id
+        assert response_dict["url"] == "https://foo.bar/"
+        assert response_dict["summary"] == "updated!"
 
-    app = create_application()
-    app.dependency_overrides[get_settings] = get_settings_override
-    app.dependency_overrides[get_current_user_from_azure] = create_mock_user_dependency(
-        "admin@test.com", "admin"
-    )
-    register_tortoise(
-        app,
-        db_url=os.environ.get("DATABASE_TEST_URL"),
-        modules={"models": ["app.models.tortoise"]},
-        generate_schemas=True,
-        add_exception_handlers=True,
-    )
-    with TestClient(app) as client:
-        yield client
-
-
-def test_create_summary(test_app_with_writer):
-    response = test_app_with_writer.post(
-        "/summaries/",
-        data=json.dumps({"url": "https://foo.bar"}),
-    )
-
-    assert response.status_code == 201
-    assert response.json()["url"] == "https://foo.bar/"
-
-
-def test_create_summary_with_custom_summary(test_app_with_writer):
-    """Test creating a summary with a custom summary provided"""
-    response = test_app_with_writer.post(
-        "/summaries/",
-        data=json.dumps(
-            {"url": "https://example.com/article", "summary": "Custom article summary"}
-        ),
-    )
-
-    assert response.status_code == 201
-    response_data = response.json()
-    assert response_data["url"] == "https://example.com/article"
-    assert response_data["summary"] == "Custom article summary"
+    def test_update_summary_incorrect_id(self, test_app_with_writer):
+        """Test 404 when updating non-existent summary."""
+        response = test_app_with_writer.put(
+            "/summaries/99999/",
+            json={"url": "https://foo.bar/", "summary": "updated!"},
+        )
+        assert response.status_code == 404
+        assert response.json()["detail"] == "Summary not found"
 
 
-def test_create_summaries_invalid_json(test_app_with_writer):
-    response = test_app_with_writer.post("/summaries/", data=json.dumps({}))
-    assert response.status_code == 422
-    assert response.json()["detail"][0]["loc"] == ["body", "url"]
+class TestSummariesWithAdmin:
+    """Test summary operations with admin role."""
+
+    def test_admin_can_create_summary(self, test_app_with_admin):
+        """Test that admin can create summaries."""
+        response = test_app_with_admin.post(
+            "/summaries/",
+            json={"url": "https://example.com", "summary": "Admin summary"},
+        )
+        assert response.status_code == 201
+        data = response.json()
+        assert data["url"] == "https://example.com/"
+        assert data["summary"] == "Admin summary"
+
+    def test_read_summary_incorrect_id(self, test_app_with_admin):
+        """Test 404 for non-existent summary."""
+        response = test_app_with_admin.get("/summaries/99999/")
+        assert response.status_code == 404
+        assert response.json()["detail"] == "Summary not found"
+
+    def test_read_all_summaries(self, test_app_with_admin):
+        """Test admin can read all summaries."""
+        response = test_app_with_admin.post(
+            "/summaries/",
+            json={"url": "https://foo.bar"},
+        )
+        summary_id = response.json()["id"]
+
+        response = test_app_with_admin.get("/summaries/")
+        assert response.status_code == 200
+
+        response_list = response.json()
+        assert len(list(filter(lambda d: d["id"] == summary_id, response_list))) == 1
+
+    def test_remove_summary_incorrect_id(self, test_app_with_admin):
+        """Test 404 when deleting non-existent summary."""
+        response = test_app_with_admin.delete("/summaries/99999/")
+        assert response.status_code == 404
+        assert response.json()["detail"] == "Summary not found"
 
 
-def test_read_summary(test_app_with_writer):
-    response = test_app_with_writer.post(
-        "/summaries/",
-        data=json.dumps({"url": "https://foo.bar"}),
-    )
-    summary_id = response.json()["id"]
+class TestSummariesWithReader:
+    """Test that reader role has limited access."""
 
-    response = test_app_with_writer.get(f"/summaries/{summary_id}/")
-    assert response.status_code == 200
+    def test_reader_cannot_create_summary(self, test_app_with_reader):
+        """Test that reader cannot create summaries."""
+        response = test_app_with_reader.post(
+            "/summaries/",
+            json={"url": "https://example.com", "summary": "Should fail"},
+        )
+        assert response.status_code == 403
+        assert "Access denied" in response.json()["detail"]
 
-    response_dict = response.json()
-    assert response_dict["id"] == summary_id
-    assert response_dict["url"] == "https://foo.bar/"
+    def test_reader_can_read_summaries(self, test_app_with_reader):
+        """Test that reader can read summaries list."""
+        response = test_app_with_reader.get("/summaries/")
+        assert response.status_code == 200
+        # Returns list (possibly empty since reader can't create)
+        assert isinstance(response.json(), list)
 
+    def test_reader_cannot_delete_summary(self, test_app_with_reader):
+        """Test that reader cannot delete summaries."""
+        response = test_app_with_reader.delete("/summaries/1/")
+        assert response.status_code == 403
+        assert "Access denied" in response.json()["detail"]
 
-def test_read_summary_incorrect_id(test_app_with_admin):
-    response = test_app_with_admin.get("/summaries/999/")
-    assert response.status_code == 404
-    assert response.json()["detail"] == "Summary not found"
-
-
-def test_read_all_summaries(test_app_with_admin):
-    response = test_app_with_admin.post(
-        "/summaries/",
-        data=json.dumps({"url": "https://foo.bar"}),
-    )
-    summary_id = response.json()["id"]
-
-    response = test_app_with_admin.get("/summaries/")
-    assert response.status_code == 200
-
-    response_list = response.json()
-    assert len(list(filter(lambda d: d["id"] == summary_id, response_list))) == 1
-
-
-def test_remove_summary(test_app_with_writer):
-    response = test_app_with_writer.post(
-        "/summaries/",
-        data=json.dumps({"url": "https://foo.bar"}),
-    )
-    summary_id = response.json()["id"]
-
-    response = test_app_with_writer.delete(f"/summaries/{summary_id}/")
-    assert response.status_code == 200
-    assert response.json()["url"] == "https://foo.bar/"
-
-
-def test_remove_summary_incorrect_id(test_app_with_admin):
-    response = test_app_with_admin.delete("/summaries/999/")
-    assert response.status_code == 404
-    assert response.json()["detail"] == "Summary not found"
-
-
-def test_update_summary(test_app_with_writer):
-    response = test_app_with_writer.post(
-        "/summaries/",
-        data=json.dumps({"url": "https://foo.bar"}),
-    )
-    summary_id = response.json()["id"]
-
-    response = test_app_with_writer.put(
-        f"/summaries/{summary_id}/",
-        data=json.dumps({"url": "https://foo.bar", "summary": "updated!"}),
-    )
-    assert response.status_code == 200
-
-    response_dict = response.json()
-    assert response_dict["id"] == summary_id
-    assert response_dict["url"] == "https://foo.bar/"
-    assert response_dict["summary"] == "updated!"
-
-
-def test_update_summary_incorrect_id(test_app_with_writer):
-    response = test_app_with_writer.put(
-        "/summaries/999/",
-        data=json.dumps({"url": "https://foo.bar/", "summary": "updated!"}),
-    )
-    assert response.status_code == 404
-    assert response.json()["detail"] == "Summary not found"
+    def test_reader_cannot_update_summary(self, test_app_with_reader):
+        """Test that reader cannot update summaries."""
+        response = test_app_with_reader.put(
+            "/summaries/1/",
+            json={"url": "https://foo.bar/", "summary": "updated!"},
+        )
+        assert response.status_code == 403
+        assert "Access denied" in response.json()["detail"]
