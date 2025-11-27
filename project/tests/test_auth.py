@@ -137,3 +137,127 @@ class TestUserCreation:
             json={"url": "https://test-reader.com"},
         )
         assert response.status_code == 403
+
+
+class TestAzureRoleMapping:
+    """Test Azure role/group to application role mapping."""
+
+    def test_admin_role_from_azure_roles(self):
+        """Test that admin role is mapped from Azure roles claim."""
+        from app.auth import _map_azure_roles_to_app_roles
+        from app.models.tortoise import UserRole
+
+        # Test various admin role names
+        claims = {"roles": ["admin"]}
+        assert _map_azure_roles_to_app_roles(claims) == UserRole.ADMIN
+
+        claims = {"roles": ["Administrator"]}
+        assert _map_azure_roles_to_app_roles(claims) == UserRole.ADMIN
+
+        claims = {"roles": ["fastapi.admin"]}
+        assert _map_azure_roles_to_app_roles(claims) == UserRole.ADMIN
+
+    def test_writer_role_from_azure_roles(self):
+        """Test that writer role is mapped from Azure roles claim."""
+        from app.auth import _map_azure_roles_to_app_roles
+        from app.models.tortoise import UserRole
+
+        claims = {"roles": ["writer"]}
+        assert _map_azure_roles_to_app_roles(claims) == UserRole.WRITER
+
+        claims = {"roles": ["Editor"]}
+        assert _map_azure_roles_to_app_roles(claims) == UserRole.WRITER
+
+        claims = {"roles": ["fastapi.writer"]}
+        assert _map_azure_roles_to_app_roles(claims) == UserRole.WRITER
+
+    def test_reader_role_default(self):
+        """Test that reader role is default when no matching roles."""
+        from app.auth import _map_azure_roles_to_app_roles
+        from app.models.tortoise import UserRole
+
+        # No roles
+        claims = {}
+        assert _map_azure_roles_to_app_roles(claims) == UserRole.READER
+
+        # Unknown role
+        claims = {"roles": ["unknown_role"]}
+        assert _map_azure_roles_to_app_roles(claims) == UserRole.READER
+
+    def test_admin_role_from_groups(self):
+        """Test that admin role is mapped from Azure groups claim."""
+        from app.auth import _map_azure_roles_to_app_roles
+        from app.models.tortoise import UserRole
+
+        claims = {"groups": ["fastapi-admins"]}
+        assert _map_azure_roles_to_app_roles(claims) == UserRole.ADMIN
+
+        claims = {"groups": ["system-administrators"]}
+        assert _map_azure_roles_to_app_roles(claims) == UserRole.ADMIN
+
+    def test_writer_role_from_groups(self):
+        """Test that writer role is mapped from Azure groups claim."""
+        from app.auth import _map_azure_roles_to_app_roles
+        from app.models.tortoise import UserRole
+
+        claims = {"groups": ["fastapi-writers"]}
+        assert _map_azure_roles_to_app_roles(claims) == UserRole.WRITER
+
+        claims = {"groups": ["content-editors"]}
+        assert _map_azure_roles_to_app_roles(claims) == UserRole.WRITER
+
+
+class TestAuthHelperFunctions:
+    """Test authentication helper functions."""
+
+    def test_require_ownership_or_admin_with_admin(self):
+        """Test that admin can access any resource."""
+        import asyncio
+
+        from app.auth import require_ownership_or_admin
+        from app.models.pydantic import CurrentUserSchema
+
+        admin_user = CurrentUserSchema(id=1, email="admin@test.com", role="admin")
+
+        async def run_test():
+            return await require_ownership_or_admin(999, admin_user)
+
+        # Admin can access resource owned by user 999
+        result = asyncio.new_event_loop().run_until_complete(run_test())
+        assert result is True
+
+    def test_require_ownership_or_admin_with_owner(self):
+        """Test that owner can access their own resource."""
+        import asyncio
+
+        from app.auth import require_ownership_or_admin
+        from app.models.pydantic import CurrentUserSchema
+
+        owner = CurrentUserSchema(id=5, email="owner@test.com", role="writer")
+
+        async def run_test():
+            return await require_ownership_or_admin(5, owner)
+
+        # Owner can access their own resource
+        result = asyncio.new_event_loop().run_until_complete(run_test())
+        assert result is True
+
+    def test_require_ownership_or_admin_denied(self):
+        """Test that non-owner non-admin is denied."""
+        import asyncio
+
+        import pytest
+        from fastapi import HTTPException
+
+        from app.auth import require_ownership_or_admin
+        from app.models.pydantic import CurrentUserSchema
+
+        non_owner = CurrentUserSchema(id=5, email="user@test.com", role="writer")
+
+        async def run_test():
+            return await require_ownership_or_admin(10, non_owner)
+
+        # Non-owner trying to access resource owned by user 10
+        with pytest.raises(HTTPException) as exc_info:
+            asyncio.new_event_loop().run_until_complete(run_test())
+        assert exc_info.value.status_code == 403
