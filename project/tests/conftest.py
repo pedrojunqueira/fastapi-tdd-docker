@@ -1,5 +1,5 @@
 import os
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from starlette.testclient import TestClient
@@ -36,9 +36,18 @@ def create_mock_azure_user_dependency(email: str, role: str, oid: str | None = N
     return _mock_azure_user
 
 
+def mock_azure_scheme_config():
+    """Mock the Azure scheme's OpenID config loading to prevent network calls."""
+    from app.azure import azure_scheme
+
+    # Mock the load_config method to do nothing
+    azure_scheme.openid_config.load_config = AsyncMock()
+
+
 @pytest.fixture(scope="module")
 def test_app():
     # set up
+    mock_azure_scheme_config()
     app = create_application()
     app.dependency_overrides[get_settings] = get_settings_override
     with TestClient(app) as test_client:
@@ -51,6 +60,7 @@ def test_app():
 @pytest.fixture(scope="module")
 def test_app_with_db():
     # set up
+    mock_azure_scheme_config()
     app = create_application()
     app.dependency_overrides[get_settings] = get_settings_override
     register_tortoise(
@@ -70,6 +80,7 @@ def test_app_with_db():
 @pytest.fixture
 def test_app_with_admin():
     """Test app with admin user authentication."""
+    mock_azure_scheme_config()
     app = create_application()
     app.dependency_overrides[get_settings] = get_settings_override
     app.dependency_overrides[get_azure_user] = create_mock_azure_user_dependency(
@@ -89,6 +100,7 @@ def test_app_with_admin():
 @pytest.fixture
 def test_app_with_writer():
     """Test app with writer user authentication."""
+    mock_azure_scheme_config()
     app = create_application()
     app.dependency_overrides[get_settings] = get_settings_override
     app.dependency_overrides[get_azure_user] = create_mock_azure_user_dependency(
@@ -108,6 +120,7 @@ def test_app_with_writer():
 @pytest.fixture
 def test_app_with_reader():
     """Test app with reader user authentication."""
+    mock_azure_scheme_config()
     app = create_application()
     app.dependency_overrides[get_settings] = get_settings_override
     app.dependency_overrides[get_azure_user] = create_mock_azure_user_dependency(
