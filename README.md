@@ -1219,13 +1219,71 @@ azd show
 # Test health endpoint
 curl https://your-app-url.azurecontainerapps.io/ping
 
-# Test summaries API
-curl https://your-app-url.azurecontainerapps.io/summaries/
+# Test summaries API (requires authentication - use Swagger UI)
+# Open https://your-app-url.azurecontainerapps.io/docs
+```
 
-# Create a new summary
-curl -X POST https://your-app-url.azurecontainerapps.io/summaries/ \
-  -H "Content-Type: application/json" \
-  -d '{"url": "https://example.com/article"}'
+### Configure Azure AD Environment Variables
+
+After the initial `azd up` deployment, you need to add the Azure AD authentication environment variables. Choose one of the following options:
+
+#### Option 1: Azure CLI (Recommended)
+
+```bash
+# Replace with your actual values
+az containerapp update \
+  --name <your-container-app-name> \
+  --resource-group <your-resource-group> \
+  --set-env-vars \
+    TENANT_ID=<your-azure-tenant-id> \
+    APP_CLIENT_ID=<your-backend-app-client-id> \
+    OPENAPI_CLIENT_ID=<your-openapi-client-id>
+
+# Example with real values:
+az containerapp update \
+  --name ca-web-vspce2id5t2ik \
+  --resource-group rg-fastapi-tdd-docker-production \
+  --set-env-vars \
+    TENANT_ID=078c6c18-7434-4931-81cd-7b9603fda5a2 \
+    APP_CLIENT_ID=ab2eb96c-e97e-422f-a405-adbf8a1c0c66 \
+    OPENAPI_CLIENT_ID=51791809-45e5-4697-b005-60e05dfccb2b
+```
+
+#### Option 2: Azure Portal
+
+1. Navigate to **Azure Portal** → **Container Apps** → Your Container App
+2. Go to **Settings** → **Environment variables**
+3. Add the following variables:
+   - `TENANT_ID`: Your Azure AD tenant ID
+   - `APP_CLIENT_ID`: Backend API app registration client ID
+   - `OPENAPI_CLIENT_ID`: OpenAPI/Swagger UI app registration client ID
+4. Click **Save** (this will restart the container)
+
+#### Option 3: Update azure.yaml (Infrastructure as Code)
+
+Add the environment variables to your `azure.yaml` or `infra/` Bicep templates for future deployments:
+
+```yaml
+# In azure.yaml or infra configuration
+env:
+  - name: TENANT_ID
+    value: ${AZURE_TENANT_ID}
+  - name: APP_CLIENT_ID
+    value: ${AZURE_APP_CLIENT_ID}
+  - name: OPENAPI_CLIENT_ID
+    value: ${AZURE_OPENAPI_CLIENT_ID}
+```
+
+### Verify Environment Variables
+
+After setting the variables, verify they are correctly configured:
+
+```bash
+az containerapp show \
+  --name <your-container-app-name> \
+  --resource-group <your-resource-group> \
+  --query "properties.template.containers[0].env" \
+  -o table
 ```
 
 ### Environment Configuration
@@ -1235,6 +1293,9 @@ The Azure deployment uses these environment variables:
 - `ENVIRONMENT=production`
 - `TESTING=0`
 - `DATABASE_URL`: Automatically configured to point to the PostgreSQL container
+- `TENANT_ID`: Azure AD tenant ID (required for authentication)
+- `APP_CLIENT_ID`: Backend API app registration client ID (required for authentication)
+- `OPENAPI_CLIENT_ID`: OpenAPI/Swagger UI app registration client ID (required for Swagger auth)
 - `APPLICATIONINSIGHTS_CONNECTION_STRING`: Auto-configured for monitoring
 
 ### Monitoring Your Application
