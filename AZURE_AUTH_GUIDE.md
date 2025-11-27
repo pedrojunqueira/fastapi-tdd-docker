@@ -42,6 +42,29 @@ You need TWO app registrations in Azure Entra ID:
 8. Select the `user_impersonation` scope
 9. Click "Add permissions"
 
+### 3. Add Production Redirect URL (After Azure Deployment)
+
+Once your app is deployed to Azure Container Apps, you need to add the production redirect URL:
+
+1. Go to Azure Portal → Azure Active Directory → App registrations
+2. Select your **OpenAPI Documentation App** (e.g., "fastapi-tdd-auth - OpenAPI")
+3. Go to **Authentication** → **Single-page application** redirect URIs
+4. Click **Add URI** and add your production URL:
+   ```
+   https://<your-container-app-name>.<environment>.<region>.azurecontainerapps.io/oauth2-redirect
+   ```
+   Example:
+   ```
+   https://ca-web-vspce2id5t2ik.graytree-6719a4b0.australiaeast.azurecontainerapps.io/oauth2-redirect
+   ```
+5. Click **Save**
+
+> **Note**: You can find your Container App URL by running:
+>
+> ```bash
+> az containerapp show --name <app-name> --resource-group <rg> --query "properties.configuration.ingress.fqdn" -o tsv
+> ```
+
 ## Environment Configuration
 
 Update your `.env` or `docker-compose.yml` with:

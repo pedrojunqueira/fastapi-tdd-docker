@@ -1286,6 +1286,36 @@ az containerapp show \
   -o table
 ```
 
+### Add Production Redirect URL in Azure AD
+
+For Swagger UI OAuth2 authentication to work in production, you must add the production redirect URL to your OpenAPI app registration:
+
+1. **Get your Container App URL**:
+
+   ```bash
+   az containerapp show \
+     --name <your-container-app-name> \
+     --resource-group <your-resource-group> \
+     --query "properties.configuration.ingress.fqdn" \
+     -o tsv
+   ```
+
+2. **Add the redirect URL in Azure Portal**:
+   - Go to **Azure Portal** → **Azure Active Directory** → **App registrations**
+   - Select your **OpenAPI app registration** (the one used for Swagger UI)
+   - Go to **Authentication** → **Single-page application** section
+   - Click **Add URI** and add:
+     ```
+     https://<your-app-fqdn>/oauth2-redirect
+     ```
+     Example:
+     ```
+     https://ca-web-vspce2id5t2ik.graytree-6719a4b0.australiaeast.azurecontainerapps.io/oauth2-redirect
+     ```
+   - Click **Save**
+
+> **Important**: Without this redirect URL, the OAuth2 "Authorize" button in Swagger UI will fail with a redirect error.
+
 ### Environment Configuration
 
 The Azure deployment uses these environment variables:
