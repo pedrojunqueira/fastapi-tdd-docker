@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import ping, summaries
+from app.api import ping, summaries, users
 from app.azure import azure_scheme
 from app.config import get_settings
 from app.db import init_db
@@ -51,6 +51,7 @@ def create_application() -> FastAPI:
     application.include_router(
         summaries.router, prefix="/summaries", tags=["summaries"]
     )
+    application.include_router(users.router, prefix="/users", tags=["users"])
 
     return application
 

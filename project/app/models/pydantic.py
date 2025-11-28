@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import AnyHttpUrl, BaseModel
+from pydantic import AnyHttpUrl, BaseModel, EmailStr
 
 
 class SummaryPayloadSchema(BaseModel):
@@ -18,19 +18,41 @@ class SummaryUpdatePayloadSchema(SummaryPayloadSchema):
 
 # User schemas
 class UserCreateSchema(BaseModel):
-    email: str
+    """Schema for admin creating a user manually."""
+
+    email: EmailStr
     role: str = "reader"  # Default role
 
 
+class UserUpdateSchema(BaseModel):
+    """Schema for admin updating a user's role."""
+
+    role: str
+
+
 class UserResponseSchema(BaseModel):
+    """Schema for user response."""
+
     id: int
     email: str
     role: str
     created_at: datetime
     last_login: datetime | None = None
 
+    class Config:
+        from_attributes = True
+
+
+class UserListResponseSchema(BaseModel):
+    """Schema for listing users."""
+
+    users: list[UserResponseSchema]
+    total: int
+
 
 class CurrentUserSchema(BaseModel):
+    """Schema for the current authenticated user."""
+
     id: int
     email: str
     role: str

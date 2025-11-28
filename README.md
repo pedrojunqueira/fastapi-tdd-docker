@@ -14,8 +14,8 @@ A FastAPI application with PostgreSQL database, containerized with Docker and or
 - ✅ **OAuth2 Authorization Code Flow with PKCE** via Swagger UI
 - ✅ **Role-based access control** with Admin, Writer, and Reader roles
 - ✅ **Azure App Roles integration** - roles defined in Azure, enforced in app
-- ✅ **Automatic user provisioning** - users created on first login
-- ✅ **Role sync** - roles updated from Azure token on each login
+- ✅ **User self-registration** - tenant users can register themselves
+- ✅ **Admin user management** - admins can manage user roles and access
 
 **Azure Deployment Ready**: This project includes full Azure deployment support using Azure Developer CLI (azd):
 
@@ -55,7 +55,10 @@ fastapi-tdd-docker/
 │   ├── tests/               # Test files
 │   │   ├── __init__.py
 │   │   ├── conftest.py      # Pytest configuration and fixtures
-│   │   └── test_ping.py     # Example test file
+│   │   ├── test_ping.py     # Health check tests
+│   │   ├── test_summaries.py # Summaries CRUD tests
+│   │   ├── test_auth.py     # Authentication and authorization tests
+│   │   └── test_users.py    # User management tests
 │   └── app/                 # FastAPI application
 │       ├── __init__.py
 │       ├── main.py          # Main application file with OAuth2 configuration
@@ -67,6 +70,7 @@ fastapi-tdd-docker/
 │       │   ├── __init__.py
 │       │   ├── ping.py      # Health check endpoint
 │       │   ├── summaries.py # Summaries CRUD endpoints (role-protected)
+│       │   ├── users.py     # User registration and management endpoints
 │       │   └── crud.py      # Database operations
 │       └── models/          # Data models
 │           ├── __init__.py
@@ -80,6 +84,7 @@ fastapi-tdd-docker/
 - **FastAPI**: Modern, fast web framework for building APIs with Python
 - **Azure AD Authentication**: Enterprise-grade OAuth2 authentication using Azure Entra ID (formerly Azure AD)
 - **Role-Based Access Control**: Admin, Writer, and Reader roles with Azure App Roles integration
+- **User Management**: Self-registration for tenant users and admin-only user administration
 - **OAuth2 PKCE Flow**: Secure authentication flow in Swagger UI with PKCE support
 - **UV Package Manager**: Ultra-fast Python package installation and dependency resolution (10-100x faster than pip)
 - **Modular API Structure**: Organized with APIRouter for scalable endpoint management
@@ -806,6 +811,190 @@ The summaries API provides CRUD operations for managing text summaries.
       "detail": "Summary not found"
     }
     ```
+
+### User Management
+
+The user management API provides self-registration for Azure AD users and admin-only user administration. Users must register before accessing protected endpoints.
+
+#### User Registration Flow
+
+1. **Authenticate with Azure AD** via Swagger UI or your application
+2. **Register as a new user** by calling `POST /users/register`
+3. **Access protected endpoints** once registered
+
+> **Note**: Only users from your Azure AD tenant can register (guest users are blocked).
+
+#### Self-Registration
+
+- **POST** `/users/register`
+  - Register the current Azure AD user in the application
+  - Requires: Azure AD authentication (tenant users only)
+  - New users are assigned the **reader** role by default
+  - Response (201 Created):
+    ```json
+    {
+      "id": 1,
+      "email": "user@yourtenant.com",
+      "role": "reader",
+      "created_at": "2025-11-29T10:30:00Z",
+      "last_login": "2025-11-29T10:30:00Z"
+    }
+    ```
+  - Response (400 Bad Request) - if already registered:
+    ```json
+    {
+      "detail": "User already registered"
+    }
+    ```
+
+#### User Profile
+
+- **GET** `/users/me`
+  - Get the current user's profile
+  - Requires: Azure AD authentication
+  - Response (200 OK):
+    ```json
+    {
+      "id": 1,
+      "email": "user@yourtenant.com",
+      "role": "reader",
+      "created_at": "2025-11-29T10:30:00Z",
+      "last_login": "2025-11-29T10:30:00Z"
+    }
+    ```
+  - Response (404 Not Found) - if not registered:
+    ```json
+    {
+      "detail": "User not registered. Please register first at /users/register"
+    }
+    ```
+
+#### Admin User Management
+
+The following endpoints are **admin-only**:
+
+- **GET** `/users/`
+
+  - List all registered users
+  - Requires: Admin role
+  - Response (200 OK):
+    ```json
+    {
+      "users": [
+        {
+          "id": 1,
+          "email": "admin@yourtenant.com",
+          "role": "admin",
+          "created_at": "2025-11-29T10:00:00Z",
+          "last_login": "2025-11-29T10:30:00Z"
+        },
+        {
+          "id": 2,
+          "email": "user@yourtenant.com",
+          "role": "reader",
+          "created_at": "2025-11-29T10:15:00Z",
+          "last_login": "2025-11-29T10:20:00Z"
+        }
+      ],
+      "total": 2
+    }
+    ```
+
+- **GET** `/users/{user_id}`
+
+  - Get a specific user by ID
+  - Requires: Admin role
+  - Response (200 OK):
+    ```json
+    {
+      "id": 1,
+      "email": "user@yourtenant.com",
+      "role": "reader",
+      "created_at": "2025-11-29T10:30:00Z",
+      "last_login": "2025-11-29T10:30:00Z"
+    }
+    ```
+  - Response (404 Not Found):
+    ```json
+    {
+      "detail": "User not found"
+    }
+    ```
+
+- **PUT** `/users/{user_id}`
+
+  - Update a user's role
+  - Requires: Admin role
+  - Valid roles: `reader`, `writer`, `admin`
+  - Request body:
+    ```json
+    {
+      "role": "writer"
+    }
+    ```
+  - Response (200 OK):
+    ```json
+    {
+      "id": 2,
+      "email": "user@yourtenant.com",
+      "role": "writer",
+      "created_at": "2025-11-29T10:15:00Z",
+      "last_login": "2025-11-29T10:20:00Z"
+    }
+    ```
+  - Response (400 Bad Request) - invalid role:
+    ```json
+    {
+      "detail": "Invalid role. Must be one of: reader, writer, admin"
+    }
+    ```
+
+- **DELETE** `/users/{user_id}`
+  - Delete a user from the application
+  - Requires: Admin role
+  - Cannot delete yourself
+  - Response (200 OK):
+    ```json
+    {
+      "message": "User deleted successfully"
+    }
+    ```
+  - Response (400 Bad Request) - trying to delete yourself:
+    ```json
+    {
+      "detail": "Cannot delete yourself"
+    }
+    ```
+
+#### User Management Access Control
+
+| Endpoint               | Reader | Writer | Admin |
+| ---------------------- | ------ | ------ | ----- |
+| `POST /users/register` | ✅     | ✅     | ✅    |
+| `GET /users/me`        | ✅     | ✅     | ✅    |
+| `GET /users/`          | ❌ 403 | ❌ 403 | ✅    |
+| `GET /users/{id}`      | ❌ 403 | ❌ 403 | ✅    |
+| `PUT /users/{id}`      | ❌ 403 | ❌ 403 | ✅    |
+| `DELETE /users/{id}`   | ❌ 403 | ❌ 403 | ✅    |
+
+#### Setting Up Your First Admin User
+
+When deploying the application for the first time:
+
+1. **Register as a user** using `POST /users/register` (you'll get the `reader` role)
+2. **Update the database directly** to promote yourself to admin:
+
+   ```bash
+   # Local development
+   docker compose exec web-db psql -U postgres -d web_dev -c \
+     "UPDATE \"user\" SET role='admin' WHERE email='your-email@yourtenant.com';"
+
+   # Or using the Azure portal for production
+   ```
+
+3. **Now you can manage other users** via the admin endpoints
+
+Alternatively, you can pre-seed the database or use a migration to create the initial admin user.
 
 ### API Documentation
 

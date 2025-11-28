@@ -1,13 +1,18 @@
 """
-Simplified authentication using fastapi-azure-auth library.
+Authentication and authorization using fastapi-azure-auth library.
 
 This module provides:
 - Azure AD authentication via fastapi-azure-auth
 - Role-based authorization (admin, writer, reader)
+- User registration (self-service for tenant users)
 - Testable dependency injection pattern
+
+Users must be registered in the application before they can access protected endpoints.
+Registration is open to any authenticated Azure AD user from the tenant.
 """
 
 import logging
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, Security
@@ -17,6 +22,23 @@ from app.models.pydantic import CurrentUserSchema
 from app.models.tortoise import User, UserRole
 
 logger = logging.getLogger(__name__)
+
+
+class AzureUserClaims:
+    """Parsed Azure user claims from JWT token."""
+
+    def __init__(self, claims: dict):
+        self.email = (
+            claims.get("preferred_username") or claims.get("email") or claims.get("upn")
+        )
+        self.azure_oid = claims.get("oid")
+        self.name = claims.get("name")
+        self.roles = claims.get("roles", [])
+        self.groups = claims.get("groups", [])
+
+    def is_valid(self) -> bool:
+        """Check if required claims are present."""
+        return bool(self.email and self.azure_oid)
 
 
 async def get_azure_user(
@@ -29,58 +51,99 @@ async def get_azure_user(
     return azure_user
 
 
+def parse_azure_claims(azure_user: object) -> AzureUserClaims:
+    """Parse Azure user claims from the token."""
+    if azure_user is None:
+        raise HTTPException(
+            status_code=500, detail="Authentication scheme not configured"
+        )
+    return AzureUserClaims(azure_user.claims)
+
+
 async def get_current_user_from_azure(
     azure_user: Annotated[object, Depends(get_azure_user)],
 ) -> CurrentUserSchema:
     """
     Get current user from Azure authentication.
-    The azure_user parameter will be injected by get_azure_user dependency.
+    User must already be registered in the application.
     """
-    if azure_user is None:
-        # This should not happen in production, only if scheme not properly configured
+    claims = parse_azure_claims(azure_user)
+
+    if not claims.is_valid():
         raise HTTPException(
-            status_code=500, detail="Authentication scheme not configured"
+            status_code=401, detail="Invalid token: missing required claims"
         )
 
-    # Extract claims from Azure token
-    claims = azure_user.claims
+    # Look up user by Azure OID - must already exist
+    user = await User.filter(azure_oid=claims.azure_oid).first()
 
-    email = claims.get("preferred_username") or claims.get("email") or claims.get("upn")
-    if not email:
-        raise HTTPException(status_code=401, detail="No email found in token")
+    if not user:
+        raise HTTPException(
+            status_code=403,
+            detail="User not registered. Please register first at /users/register",
+        )
 
-    azure_oid = claims.get("oid")
-    if not azure_oid:
-        raise HTTPException(status_code=401, detail="No Azure Object ID found in token")
+    # Update last login and email if changed
+    needs_save = False
+    if user.email != claims.email:
+        user.email = claims.email
+        needs_save = True
+    user.last_login = datetime.now(UTC)
+    needs_save = True
 
-    # Map Azure roles to application roles
-    user_role = _map_azure_roles_to_app_roles(claims)
+    if needs_save:
+        await user.save()
 
-    # Create or update user in database
-    user, created = await User.get_or_create(
-        azure_oid=azure_oid, defaults={"email": email, "role": user_role}
+    logger.info(f"User authenticated: {claims.email} (role: {user.role.value})")
+
+    return CurrentUserSchema(id=user.id, email=user.email, role=user.role.value)
+
+
+async def get_azure_claims_for_registration(
+    azure_user: Annotated[object, Depends(get_azure_user)],
+) -> AzureUserClaims:
+    """
+    Get Azure claims for user registration.
+    Does not require user to be registered yet.
+    """
+    claims = parse_azure_claims(azure_user)
+
+    if not claims.is_valid():
+        raise HTTPException(
+            status_code=401, detail="Invalid token: missing required claims"
+        )
+
+    return claims
+
+
+async def register_user(claims: AzureUserClaims) -> User:
+    """
+    Register a new user from Azure claims.
+    All new users get the 'reader' role by default.
+    """
+    # Check if user already exists
+    existing_user = await User.filter(azure_oid=claims.azure_oid).first()
+    if existing_user:
+        raise HTTPException(status_code=400, detail="User already registered")
+
+    # Create new user with default reader role
+    user = await User.create(
+        azure_oid=claims.azure_oid,
+        email=claims.email,
+        role=UserRole.READER,
+        last_login=datetime.now(UTC),
     )
 
-    # Always update email and role from Azure token (role might have changed)
-    if not created:
-        needs_save = False
-        if user.email != email:
-            user.email = email
-            needs_save = True
-        if user.role != user_role:
-            logger.info(f"Updating user role from {user.role} to {user_role}")
-            user.role = user_role
-            needs_save = True
-        if needs_save:
-            await user.save()
-
-    logger.info(f"User authenticated: {email} (role: {user_role.value})")
-
-    return CurrentUserSchema(id=user.id, email=user.email, role=user_role.value)
+    logger.info(f"New user registered: {claims.email}")
+    return user
 
 
 def _map_azure_roles_to_app_roles(claims: dict) -> UserRole:
-    """Map Azure roles/groups to application roles."""
+    """
+    Map Azure roles/groups to application roles.
+    NOTE: This is kept for reference but not used in current flow.
+    Roles are managed within the application by admins, not from Azure.
+    """
     roles = claims.get("roles", [])
     groups = claims.get("groups", [])
 
@@ -97,53 +160,16 @@ def _map_azure_roles_to_app_roles(claims: dict) -> UserRole:
     if any(role.lower() in admin_roles for role in roles) or any(
         group in admin_groups for group in groups
     ):
-        logger.info("User assigned admin role")
         return UserRole.ADMIN
 
     # Check for writer role
     if any(role.lower() in writer_roles for role in roles) or any(
         group in writer_groups for group in groups
     ):
-        logger.info("User assigned writer role")
         return UserRole.WRITER
 
     # Default to reader
-    logger.info("User assigned default reader role")
     return UserRole.READER
-
-
-def require_roles(*allowed_roles: str):
-    """
-    Decorator to require specific roles for endpoint access.
-
-    Usage:
-        @require_roles("admin", "writer")
-        async def create_summary(user: CurrentUserSchema = Depends(get_current_user_from_azure)):
-            pass
-    """
-
-    def decorator(func):
-        async def wrapper(*args, **kwargs):
-            user = None
-            for _key, value in kwargs.items():
-                if isinstance(value, CurrentUserSchema):
-                    user = value
-                    break
-
-            if not user:
-                raise HTTPException(status_code=401, detail="Authentication required")
-
-            if user.role not in allowed_roles:
-                raise HTTPException(
-                    status_code=403,
-                    detail=f"Access denied. Required roles: {', '.join(allowed_roles)}",
-                )
-
-            return await func(*args, **kwargs)
-
-        return wrapper
-
-    return decorator
 
 
 async def require_ownership_or_admin(
