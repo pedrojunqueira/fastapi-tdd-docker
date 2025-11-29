@@ -12,3 +12,8 @@ github-secrets*
 htmlcov/
 .coverage
 .coverage.*
+
+# Node.js
+node_modules/
+dist/
+.npm
