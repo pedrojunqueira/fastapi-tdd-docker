@@ -133,7 +133,11 @@ class TestSummariesWithAdmin:
 
 
 class TestSummariesWithReader:
-    """Test that reader role has limited access."""
+    """Test that reader role has no access to summaries.
+
+    Readers are essentially in a 'pending approval' state.
+    They can only access /users/me until promoted to writer by an admin.
+    """
 
     def test_reader_cannot_create_summary(self, test_app_with_reader):
         """Test that reader cannot create summaries."""
@@ -144,12 +148,17 @@ class TestSummariesWithReader:
         assert response.status_code == 403
         assert "Access denied" in response.json()["detail"]
 
-    def test_reader_can_read_summaries(self, test_app_with_reader):
-        """Test that reader can read summaries list."""
+    def test_reader_cannot_read_summaries_list(self, test_app_with_reader):
+        """Test that reader cannot read summaries list."""
         response = test_app_with_reader.get("/summaries/")
-        assert response.status_code == 200
-        # Returns list (possibly empty since reader can't create)
-        assert isinstance(response.json(), list)
+        assert response.status_code == 403
+        assert "Access denied" in response.json()["detail"]
+
+    def test_reader_cannot_read_single_summary(self, test_app_with_reader):
+        """Test that reader cannot read a single summary."""
+        response = test_app_with_reader.get("/summaries/1/")
+        assert response.status_code == 403
+        assert "Access denied" in response.json()["detail"]
 
     def test_reader_cannot_delete_summary(self, test_app_with_reader):
         """Test that reader cannot delete summaries."""

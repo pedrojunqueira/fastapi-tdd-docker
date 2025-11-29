@@ -67,29 +67,37 @@ class TestRoleBasedAuthorization:
         assert response.status_code == 200
 
     # Reader role tests
-    def test_reader_can_only_read(self, test_app_with_reader):
-        """Test that reader can only read, not write."""
-        # Cannot create
+    def test_reader_can_only_access_profile(self, test_app_with_reader):
+        """Test that reader can only access their profile, not summaries.
+
+        Readers are in a 'pending approval' state. They need to be promoted
+        to writer by an admin before they can use the summaries API.
+        """
+        # Cannot create summaries
         response = test_app_with_reader.post(
             "/summaries/",
             json={"url": "https://reader-test.com", "summary": "Should fail"},
         )
         assert response.status_code == 403
 
-        # Can read list
+        # Cannot read summaries list
         response = test_app_with_reader.get("/summaries/")
-        assert response.status_code == 200
+        assert response.status_code == 403
 
-        # Cannot update
+        # Cannot update summaries
         response = test_app_with_reader.put(
             "/summaries/1/",
             json={"url": "https://reader-test.com", "summary": "Should fail"},
         )
         assert response.status_code == 403
 
-        # Cannot delete
+        # Cannot delete summaries
         response = test_app_with_reader.delete("/summaries/1/")
         assert response.status_code == 403
+
+        # CAN access their own profile
+        response = test_app_with_reader.get("/users/me")
+        assert response.status_code == 200
 
 
 class TestAuthenticationErrors:

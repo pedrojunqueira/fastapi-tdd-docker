@@ -4,7 +4,6 @@ from fastapi import APIRouter, Depends, HTTPException, Path
 
 from app.api import crud
 from app.auth import (
-    get_authenticated_user,
     get_writer_or_admin_user,
 )
 from app.models.pydantic import (
@@ -35,10 +34,10 @@ async def create_summary(
 
 @router.get("/{id}/", response_model=SummarySchema)
 async def read_summary(
-    current_user: Annotated[CurrentUserSchema, Depends(get_authenticated_user)],
+    current_user: Annotated[CurrentUserSchema, Depends(get_writer_or_admin_user)],
     id: int = Path(..., gt=0),
 ) -> SummarySchema:
-    """Get a single summary by ID. All authenticated users can read."""
+    """Get a single summary by ID. Requires writer or admin role."""
     summary = await crud.get(id)
     if not summary:
         raise HTTPException(status_code=404, detail="Summary not found")
@@ -52,9 +51,9 @@ async def read_summary(
 
 @router.get("/", response_model=list[SummarySchema])
 async def read_all_summaries(
-    current_user: Annotated[CurrentUserSchema, Depends(get_authenticated_user)],
+    current_user: Annotated[CurrentUserSchema, Depends(get_writer_or_admin_user)],
 ) -> list[SummarySchema]:
-    """Get all summaries. Readers see their own, admins see all."""
+    """Get all summaries. Writers see their own, admins see all."""
     return await crud.get_all(current_user)
 
 
