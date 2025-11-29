@@ -1,4 +1,24 @@
 services:
+  # React Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - 3000:3000
+    environment:
+      - VITE_AZURE_CLIENT_ID=51791809-45e5-4697-b005-60e05dfccb2b
+      - VITE_AZURE_TENANT_ID=078c6c18-7434-4931-81cd-7b9603fda5a2
+      - VITE_API_CLIENT_ID=ab2eb96c-e97e-422f-a405-adbf8a1c0c66
+      - VITE_REDIRECT_URI=http://localhost:3000
+      - VITE_API_BASE_URL=/api
+    depends_on:
+      - web
+
+  # FastAPI Backend
   web:
     build: ./project
     command: uv run uvicorn app.main:app --reload --workers 1 --host 0.0.0.0 --port 8000
@@ -15,11 +35,12 @@ services:
       - TENANT_ID=078c6c18-7434-4931-81cd-7b9603fda5a2
       - APP_CLIENT_ID=ab2eb96c-e97e-422f-a405-adbf8a1c0c66
       - OPENAPI_CLIENT_ID=51791809-45e5-4697-b005-60e05dfccb2b
-      - BACKEND_CORS_ORIGINS=["http://localhost:8004"]
+      - BACKEND_CORS_ORIGINS=["http://localhost:3000","http://localhost:8004"]
       - SCOPE_DESCRIPTION=user_impersonation
     depends_on:
       - web-db
 
+  # PostgreSQL Database
   web-db:
     build:
       context: ./project/db
