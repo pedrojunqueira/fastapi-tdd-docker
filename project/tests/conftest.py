@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from starlette.testclient import TestClient
+from tortoise import Tortoise
 from tortoise.contrib.fastapi import register_tortoise
 
 from app.auth import get_azure_user, get_current_user_from_azure
@@ -56,7 +57,9 @@ def mock_azure_scheme_config():
     azure_scheme.openid_config.load_config = AsyncMock()
 
 
-async def ensure_user_exists(email: str, role: str, oid: str | None = None) -> User:
+async def ensure_user_exists_async(
+    email: str, role: str, oid: str | None = None
+) -> User:
     """Ensure a user exists in the database for testing."""
     azure_oid = oid or f"test-oid-{email}"
     role_enum = UserRole(role)
@@ -69,6 +72,32 @@ async def ensure_user_exists(email: str, role: str, oid: str | None = None) -> U
         user.role = role_enum
         await user.save()
     return user
+
+
+async def setup_test_db_and_user(email: str, role: str, user_id: int):
+    """Initialize Tortoise and create a test user, return the user."""
+    db_url = os.environ.get("DATABASE_TEST_URL")
+    await Tortoise.init(
+        db_url=db_url,
+        modules={"models": ["app.models.tortoise"]},
+    )
+    await Tortoise.generate_schemas()
+
+    # Create the test user with a specific ID if possible
+    oid = f"test-oid-{email}"
+    user = await User.filter(azure_oid=oid).first()
+    if not user:
+        user = await User.create(
+            azure_oid=oid,
+            email=email,
+            role=UserRole(role),
+        )
+    return user
+
+
+async def cleanup_test_db():
+    """Close Tortoise connections."""
+    await Tortoise.close_connections()
 
 
 @pytest.fixture(scope="module")
@@ -107,18 +136,10 @@ def test_app_with_db():
 @pytest.fixture
 def test_app_with_admin():
     """Test app with admin user authentication.
-    Mocks the current user directly to bypass database lookup."""
+    Creates a real user in the DB and mocks authentication to return that user."""
     mock_azure_scheme_config()
     app = create_application()
     app.dependency_overrides[get_settings] = get_settings_override
-    # Mock get_current_user_from_azure to return admin user directly
-    app.dependency_overrides[get_current_user_from_azure] = (
-        create_mock_current_user_dependency(1, "admin@test.com", "admin")
-    )
-    # Also mock get_azure_user for endpoints that use it directly (like registration)
-    app.dependency_overrides[get_azure_user] = create_mock_azure_user_dependency(
-        "admin@test.com", "admin"
-    )
     register_tortoise(
         app,
         db_url=os.environ.get("DATABASE_TEST_URL"),
@@ -126,23 +147,43 @@ def test_app_with_admin():
         generate_schemas=True,
         add_exception_handlers=True,
     )
+
     with TestClient(app) as client:
+        # Create the admin user via API registration endpoint first
+        # Override to allow registration
+        app.dependency_overrides[get_azure_user] = create_mock_azure_user_dependency(
+            "admin@test.com", "admin", "test-oid-admin"
+        )
+        # Register the user
+        response = client.post("/users/register")
+        if response.status_code == 201:
+            user_data = response.json()
+            user_id = user_data["id"]
+        elif response.status_code == 400:
+            # User already exists, get their info via /users/me
+            # We need to set up auth first
+            app.dependency_overrides[get_current_user_from_azure] = (
+                create_mock_current_user_dependency(1, "admin@test.com", "admin")
+            )
+            # Try to find the user - for now use ID 1 as fallback
+            user_id = 1
+        else:
+            user_id = 1
+
+        # Now override the dependency with the real user ID
+        app.dependency_overrides[get_current_user_from_azure] = (
+            create_mock_current_user_dependency(user_id, "admin@test.com", "admin")
+        )
         yield client
 
 
 @pytest.fixture
 def test_app_with_writer():
     """Test app with writer user authentication.
-    Mocks the current user directly to bypass database lookup."""
+    Creates a real user in the DB and mocks authentication to return that user."""
     mock_azure_scheme_config()
     app = create_application()
     app.dependency_overrides[get_settings] = get_settings_override
-    app.dependency_overrides[get_current_user_from_azure] = (
-        create_mock_current_user_dependency(2, "writer@test.com", "writer")
-    )
-    app.dependency_overrides[get_azure_user] = create_mock_azure_user_dependency(
-        "writer@test.com", "writer"
-    )
     register_tortoise(
         app,
         db_url=os.environ.get("DATABASE_TEST_URL"),
@@ -150,23 +191,33 @@ def test_app_with_writer():
         generate_schemas=True,
         add_exception_handlers=True,
     )
+
     with TestClient(app) as client:
+        # Create the writer user via API registration endpoint
+        app.dependency_overrides[get_azure_user] = create_mock_azure_user_dependency(
+            "writer@test.com", "writer", "test-oid-writer"
+        )
+        response = client.post("/users/register")
+        if response.status_code == 201:
+            user_data = response.json()
+            user_id = user_data["id"]
+        else:
+            user_id = 2  # Fallback
+
+        # Now override the dependency with the real user ID
+        app.dependency_overrides[get_current_user_from_azure] = (
+            create_mock_current_user_dependency(user_id, "writer@test.com", "writer")
+        )
         yield client
 
 
 @pytest.fixture
 def test_app_with_reader():
     """Test app with reader user authentication.
-    Mocks the current user directly to bypass database lookup."""
+    Creates a real user in the DB and mocks authentication to return that user."""
     mock_azure_scheme_config()
     app = create_application()
     app.dependency_overrides[get_settings] = get_settings_override
-    app.dependency_overrides[get_current_user_from_azure] = (
-        create_mock_current_user_dependency(3, "reader@test.com", "reader")
-    )
-    app.dependency_overrides[get_azure_user] = create_mock_azure_user_dependency(
-        "reader@test.com", "reader"
-    )
     register_tortoise(
         app,
         db_url=os.environ.get("DATABASE_TEST_URL"),
@@ -174,7 +225,23 @@ def test_app_with_reader():
         generate_schemas=True,
         add_exception_handlers=True,
     )
+
     with TestClient(app) as client:
+        # Create the reader user via API registration endpoint
+        app.dependency_overrides[get_azure_user] = create_mock_azure_user_dependency(
+            "reader@test.com", "reader", "test-oid-reader"
+        )
+        response = client.post("/users/register")
+        if response.status_code == 201:
+            user_data = response.json()
+            user_id = user_data["id"]
+        else:
+            user_id = 3  # Fallback
+
+        # Now override the dependency with the real user ID
+        app.dependency_overrides[get_current_user_from_azure] = (
+            create_mock_current_user_dependency(user_id, "reader@test.com", "reader")
+        )
         yield client
 
 
