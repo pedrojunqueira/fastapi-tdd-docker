@@ -119,22 +119,34 @@ async def get_azure_claims_for_registration(
 async def register_user(claims: AzureUserClaims) -> User:
     """
     Register a new user from Azure claims.
-    All new users get the 'reader' role by default.
+
+    - The FIRST user to register becomes an admin (to bootstrap the system)
+    - All subsequent users get the 'reader' role by default
     """
     # Check if user already exists
     existing_user = await User.filter(azure_oid=claims.azure_oid).first()
     if existing_user:
         raise HTTPException(status_code=400, detail="User already registered")
 
-    # Create new user with default reader role
+    # Check if this is the first user - they become admin
+    user_count = await User.all().count()
+    if user_count == 0:
+        role = UserRole.ADMIN
+        logger.info(
+            f"First user registration - assigning admin role to: {claims.email}"
+        )
+    else:
+        role = UserRole.READER
+
+    # Create new user
     user = await User.create(
         azure_oid=claims.azure_oid,
         email=claims.email,
-        role=UserRole.READER,
+        role=role,
         last_login=datetime.now(UTC),
     )
 
-    logger.info(f"New user registered: {claims.email}")
+    logger.info(f"New user registered: {claims.email} with role: {role.value}")
     return user
 
 

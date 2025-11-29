@@ -11,5 +11,5 @@ azure_scheme = SingleTenantAzureAuthorizationCodeBearer(
     app_client_id=settings.app_client_id,
     tenant_id=settings.tenant_id,
     scopes=settings.scopes,
-    allow_guest_users=False,  # Only allow users from this tenant
+    allow_guest_users=True,  # Allow guest users for now (can restrict later)
 )

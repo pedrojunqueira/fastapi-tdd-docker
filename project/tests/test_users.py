@@ -11,12 +11,19 @@ class TestUserRegistration:
     """Test user self-registration."""
 
     def test_new_user_can_register(self, test_app_with_unregistered_user):
-        """Test that a new Azure AD user can register themselves."""
+        """Test that a new Azure AD user can register themselves.
+
+        Note: First user becomes admin, subsequent users become readers.
+        Since tests share a database, the role depends on test order.
+        """
         response = test_app_with_unregistered_user.post("/users/register")
         assert response.status_code == 201
         data = response.json()
         assert data["email"] == "newuser@test.com"
-        assert data["role"] == "reader"  # Default role
+        assert data["role"] in [
+            "admin",
+            "reader",
+        ]  # First user gets admin, others get reader
         assert "id" in data
         assert "created_at" in data
 

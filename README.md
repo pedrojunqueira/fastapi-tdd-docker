@@ -979,22 +979,22 @@ The following endpoints are **admin-only**:
 
 #### Setting Up Your First Admin User
 
-When deploying the application for the first time:
+The application automatically handles the "first admin" problem:
 
-1. **Register as a user** using `POST /users/register` (you'll get the `reader` role)
-2. **Update the database directly** to promote yourself to admin:
+- **The FIRST user to register** is automatically assigned the **admin** role
+- **All subsequent users** get the **reader** role by default
 
-   ```bash
-   # Local development
-   docker compose exec web-db psql -U postgres -d web_dev -c \
-     "UPDATE \"user\" SET role='admin' WHERE email='your-email@yourtenant.com';"
+Simply:
 
-   # Or using the Azure portal for production
-   ```
+1. **Authenticate** with Azure AD via Swagger UI
+2. **Register** using `POST /users/register`
+3. **You're now an admin** and can manage other users!
 
-3. **Now you can manage other users** via the admin endpoints
-
-Alternatively, you can pre-seed the database or use a migration to create the initial admin user.
+> **Note**: If you need to reset and create a new first admin, you can clear the users table:
+>
+> ```bash
+> docker compose exec web-db psql -U postgres -d web_dev -c "DELETE FROM \"user\";"
+> ```
 
 ### API Documentation
 
