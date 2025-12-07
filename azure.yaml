@@ -27,7 +27,8 @@ hooks:
     shell: sh
     run: |
       echo "Infrastructure provisioned successfully"
-      echo "Database and web services are being deployed..."
+      echo "Redeploying frontend with updated URLs..."
+      azd deploy frontend --no-prompt
   predeploy:
     shell: sh
     run: |
