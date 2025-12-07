@@ -7,7 +7,7 @@ import {
   type ReactNode,
 } from "react";
 import { useMsal, useIsAuthenticated } from "@azure/msal-react";
-import { InteractionStatus } from "@azure/msal-browser";
+import { InteractionStatus, BrowserUtils } from "@azure/msal-browser";
 import { loginRequest } from "../config/authConfig";
 import { api } from "../services/api";
 import type { AuthContextType, User } from "../types";
@@ -37,16 +37,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return response.accessToken;
     } catch (error) {
       console.error("Failed to acquire token silently:", error);
-      // If silent acquisition fails, try interactive
-      try {
-        const response = await instance.acquireTokenPopup(loginRequest);
-        setAccessToken(response.accessToken);
-        return response.accessToken;
-      } catch (popupError) {
-        console.error("Failed to acquire token via popup:", popupError);
-        setAccessToken(null);
-        return null;
+      // If silent acquisition fails, try interactive only if not in a popup
+      if (!BrowserUtils.isInPopup()) {
+        try {
+          const response = await instance.acquireTokenPopup(loginRequest);
+          setAccessToken(response.accessToken);
+          return response.accessToken;
+        } catch (popupError) {
+          console.error("Failed to acquire token via popup:", popupError);
+          setAccessToken(null);
+          return null;
+        }
       }
+      setAccessToken(null);
+      return null;
     }
   }, [instance, accounts]);
 
