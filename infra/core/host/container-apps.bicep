@@ -40,5 +40,6 @@ resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2022-10
 }
 
 output environmentName string = containerAppsEnvironment.name
+output defaultDomain string = containerAppsEnvironment.properties.defaultDomain
 output registryLoginServer string = containerRegistry.properties.loginServer
 output registryName string = containerRegistry.name

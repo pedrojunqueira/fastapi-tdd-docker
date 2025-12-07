@@ -6,9 +6,9 @@ export const msalConfig = {
     // The client ID of your SPA registered in Azure AD
     clientId: import.meta.env.VITE_AZURE_CLIENT_ID || "",
     // The tenant ID of your Azure AD
-    authority: `https://login.microsoftonline.com/${
-      import.meta.env.VITE_AZURE_TENANT_ID || ""
-    }`,
+    authority:
+      "https://login.microsoftonline.com/" +
+      (import.meta.env.VITE_AZURE_TENANT_ID || ""),
     // Where to redirect after login - must be registered in Azure AD
     redirectUri: import.meta.env.VITE_REDIRECT_URI || "http://localhost:3000",
     postLogoutRedirectUri:

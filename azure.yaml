@@ -10,6 +10,18 @@ services:
     host: containerapp
     docker:
       path: ./Dockerfile.prod
+  frontend:
+    project: ./frontend
+    language: js
+    host: containerapp
+    docker:
+      path: ./Dockerfile.azure
+      buildArgs:
+        - VITE_AZURE_CLIENT_ID=${AZURE_CLIENT_ID}
+        - VITE_AZURE_TENANT_ID=${AZURE_TENANT_ID}
+        - VITE_API_CLIENT_ID=${AZURE_API_CLIENT_ID}
+        - VITE_REDIRECT_URI=${FRONTEND_URI}
+        - VITE_API_BASE_URL=${WEB_URI}
 hooks:
   postprovision:
     shell: sh

@@ -11,8 +11,11 @@
     "appName": {
       "value": "${AZURE_APP_NAME}"
     },
-    "principalId": {
-      "value": "${AZURE_PRINCIPAL_ID}"
+    "azureTenantId": {
+      "value": "${AZURE_TENANT_ID}"
+    },
+    "apiClientId": {
+      "value": "${AZURE_API_CLIENT_ID}"
     }
   }
 }

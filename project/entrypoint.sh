@@ -31,10 +31,17 @@ echo "PostgreSQL started"
 if [ "$ENVIRONMENT" = "production" ] || [ "$ENVIRONMENT" = "prod" ]; then
     echo "Running database migrations..."
     
+    # Wait a bit more to ensure PostgreSQL is fully ready to accept connections
+    sleep 2
+    
     # Since migrations are already initialized in the repo, 
     # we just need to apply them to the database
     echo "Applying aerich migrations..."
-    uv run aerich upgrade
+    if .venv/bin/aerich upgrade; then
+        echo "Migrations completed successfully"
+    else
+        echo "Warning: Migration failed, but continuing startup..."
+    fi
 fi
 
 exec "$@"
