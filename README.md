@@ -32,76 +32,94 @@ Deploy to Azure in minutes with: `azd up`
 ```
 fastapi-tdd-docker/
 ├── .github/                    # GitHub Actions CI/CD workflows
-│   └── workflows/             # GitHub Actions workflow files
-│       ├── ci-cd.yml         # Main CI/CD pipeline (test, lint, deploy)
-│       └── pr-validation.yml # Pull request validation workflow
-├── docker-compose.yml          # Docker Compose configuration
-├── AZURE_AUTH_GUIDE.md        # Azure AD authentication setup guide
-├── AZURE_ROLES_SETUP.md       # Azure AD roles configuration guide
-├── scripts/                    # Development and utility scripts
-│   ├── lint.sh               # Ruff linting and formatting script
-│   └── setup-github-actions.sh # Azure service principal setup helper
-├── project/                    # Application source code
-│   ├── Dockerfile             # Docker image definition
-│   ├── pyproject.toml         # Python project configuration and dependencies (UV-based)
-│   ├── uv.lock                # Locked dependency versions for reproducible builds
-│   ├── .dockerignore         # Docker ignore patterns
-│   ├── entrypoint.sh         # Container startup script
-│   ├── db/                   # Database configuration
-│   │   ├── Dockerfile        # PostgreSQL custom image
-│   │   └── create.sql        # Database initialization
-│   ├── migrations/           # Database migration files
-│   │   └── models/          # Generated migration scripts
-│   ├── tests/               # Test files
-│   │   ├── __init__.py
-│   │   ├── conftest.py      # Pytest configuration and fixtures
-│   │   ├── test_ping.py     # Health check tests
-│   │   ├── test_summaries.py # Summaries CRUD tests
-│   │   ├── test_auth.py     # Authentication and authorization tests
-│   │   └── test_users.py    # User management tests
-│   └── app/                 # FastAPI application
-│       ├── __init__.py
-│       ├── main.py          # Main application file with OAuth2 configuration
-│       ├── config.py        # Configuration settings including Azure AD
-│       ├── auth.py          # Authentication and authorization logic
-│       ├── azure.py         # Azure AD scheme initialization
-│       ├── db.py            # Tortoise ORM configuration
-│       ├── api/             # API routes and endpoints
-│       │   ├── __init__.py
-│       │   ├── ping.py      # Health check endpoint
-│       │   ├── summaries.py # Summaries CRUD endpoints (role-protected)
-│       │   ├── users.py     # User registration and management endpoints
-│       │   └── crud.py      # Database operations
-│       └── models/          # Data models
-│           ├── __init__.py
-│           ├── pydantic.py  # Pydantic schemas for API
-│           └── tortoise.py  # Tortoise ORM models (User, TextSummary)
-└── README.md                # This file
+│   └── workflows/
+│       ├── ci-cd.yml           # Main CI/CD pipeline (test, lint, deploy)
+│       ├── pr-validation.yml   # Pull request validation workflow
+│       └── destroy-infrastructure.yml  # Manual infrastructure teardown
+├── frontend/                   # React/TypeScript frontend application
+│   ├── src/
+│   │   ├── components/         # Reusable UI components
+│   │   │   ├── Navbar.tsx      # Navigation bar with auth status
+│   │   │   └── ProtectedRoute.tsx  # Route guard for authenticated users
+│   │   ├── pages/              # Page components
+│   │   │   ├── LoginPage.tsx   # Azure AD login page
+│   │   │   ├── SummariesPage.tsx  # Main summaries CRUD page
+│   │   │   └── UsersAdminPage.tsx # Admin user management
+│   │   ├── context/
+│   │   │   └── AuthContext.tsx # Authentication state management
+│   │   ├── services/
+│   │   │   └── api.ts          # Backend API client
+│   │   ├── config/
+│   │   │   └── authConfig.ts   # MSAL Azure AD configuration
+│   │   ├── App.tsx             # Main app with routing
+│   │   └── main.tsx            # React entry point
+│   ├── Dockerfile.azure        # Production Docker image for Azure
+│   ├── nginx.azure.conf        # Nginx config for SPA routing
+│   ├── package.json            # Node.js dependencies
+│   └── vite.config.ts          # Vite build configuration
+├── project/                    # FastAPI backend application
+│   ├── app/
+│   │   ├── api/                # API routes
+│   │   │   ├── ping.py         # Health check endpoint
+│   │   │   ├── summaries.py    # Summaries CRUD (role-protected)
+│   │   │   ├── users.py        # User registration & management
+│   │   │   └── crud.py         # Database operations
+│   │   ├── models/             # Data models
+│   │   │   ├── pydantic.py     # API schemas
+│   │   │   └── tortoise.py     # ORM models (User, TextSummary)
+│   │   ├── main.py             # FastAPI app with OAuth2 config
+│   │   ├── config.py           # Settings including Azure AD
+│   │   ├── auth.py             # Auth & authorization logic
+│   │   ├── azure.py            # Azure AD scheme setup
+│   │   └── db.py               # Tortoise ORM configuration
+│   ├── migrations/             # Aerich database migrations
+│   ├── tests/                  # Pytest test suite
+│   ├── Dockerfile.prod         # Production Docker image
+│   ├── entrypoint.sh           # Startup script with migrations
+│   └── pyproject.toml          # Python dependencies (UV)
+├── infra/                      # Azure Bicep infrastructure
+│   ├── main.bicep              # Main infrastructure template
+│   ├── main.parameters.json    # Parameter values
+│   └── app/
+│       ├── web.bicep           # Backend Container App
+│       ├── frontend.bicep      # Frontend Container App
+│       └── database-container.bicep  # PostgreSQL Container App
+├── azure.yaml                  # Azure Developer CLI configuration
+├── docker-compose.yml          # Local development setup
+├── DEPLOY.md                   # Quick deployment guide
+└── README.md                   # This file
 ```
 
 ## Features
 
+### Frontend (React/TypeScript)
+
+- **React 18 with TypeScript**: Modern type-safe frontend development
+- **MSAL Authentication**: Azure AD integration using @azure/msal-react
+- **Tailwind CSS**: Utility-first styling for responsive UI
+- **Vite**: Fast development server and optimized builds
+- **Role-Based UI**: Different views for Admin, Writer, and Reader roles
+- **SPA Routing**: Client-side routing with React Router
+
+### Backend (FastAPI/Python)
+
 - **FastAPI**: Modern, fast web framework for building APIs with Python
-- **Azure AD Authentication**: Enterprise-grade OAuth2 authentication using Azure Entra ID (formerly Azure AD)
+- **Azure AD Authentication**: Enterprise-grade OAuth2 authentication using Azure Entra ID
 - **Role-Based Access Control**: Admin, Writer, and Reader roles with Azure App Roles integration
 - **User Management**: Self-registration for tenant users and admin-only user administration
 - **OAuth2 PKCE Flow**: Secure authentication flow in Swagger UI with PKCE support
-- **UV Package Manager**: Ultra-fast Python package installation and dependency resolution (10-100x faster than pip)
-- **Modular API Structure**: Organized with APIRouter for scalable endpoint management
-- **CRUD Operations**: Full Create, Read, Update, Delete operations for summaries
-- **PostgreSQL**: Robust relational database with async support
-- **Tortoise ORM**: Async ORM inspired by Django ORM for FastAPI
-- **Pydantic Schemas**: Type validation and serialization for API requests/responses
+- **UV Package Manager**: Ultra-fast Python package installation (10-100x faster than pip)
+- **PostgreSQL + Tortoise ORM**: Async database operations with robust relational database
 - **Database Migrations**: Automated schema management with Aerich
-- **Azure Deployment**: One-command deployment to Azure using Azure Developer CLI (azd)
-- **Automatic Migration Handling**: Smart entrypoint script that automatically applies database migrations in Azure
-- **Containerized Database**: Cost-effective PostgreSQL container deployment in Azure Container Apps
-- **Advanced Testing**: Pytest with fixtures, separate test database, and comprehensive code coverage reporting
-- **Docker Optimization**: Multi-layer caching with UV for faster container builds
-- **Docker Compose**: Multi-container orchestration for local development
-- **Environment Configuration**: Configurable settings using Pydantic Settings
-- **Hot Reload**: Automatic code reloading during development
-- **Python 3.13**: Latest Python version with slim base image and compiled bytecode optimization
+- **Advanced Testing**: Pytest with 80%+ code coverage requirement
+
+### Infrastructure (Azure)
+
+- **Azure Container Apps**: Serverless container hosting for all services
+- **One-Command Deployment**: Deploy entire stack with `azd up`
+- **Infrastructure as Code**: Bicep templates for reproducible deployments
+- **Automatic Migrations**: Entrypoint script handles database migrations
+- **CI/CD Pipeline**: GitHub Actions for automated testing and deployment
 
 ## Technology Stack
 

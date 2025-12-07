@@ -23,6 +23,9 @@ param azureTenantId string = ''
 @description('Azure AD API Client ID (backend)')
 param apiClientId string = ''
 
+@description('Azure AD Frontend Client ID (for OpenAPI/Swagger)')
+param openApiClientId string = ''
+
 var abbrs = loadJsonContent('./abbreviations.json')
 var resourceToken = toLower(uniqueString(subscription().id, environmentName, location))
 var tags = { 'azd-env-name': environmentName }
@@ -57,6 +60,7 @@ module web './app/web.bicep' = {
     corsOrigins: '["https://${frontendAppName}.${containerApps.outputs.defaultDomain}"]'
     tenantId: azureTenantId
     appClientId: apiClientId
+    openApiClientId: openApiClientId
   }
 }
 

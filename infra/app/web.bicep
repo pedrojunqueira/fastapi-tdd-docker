@@ -23,6 +23,9 @@ param tenantId string = ''
 @description('Azure AD App Client ID')
 param appClientId string = ''
 
+@description('Azure AD Frontend Client ID (for OpenAPI/Swagger)')
+param openApiClientId string = ''
+
 @description('Environment variables for the web service')
 param env array = []
 
@@ -74,6 +77,10 @@ module app '../core/host/container-app.bicep' = {
       {
         name: 'APP_CLIENT_ID'
         value: appClientId
+      }
+      {
+        name: 'OPENAPI_CLIENT_ID'
+        value: openApiClientId
       }
     ], env)
     targetPort: port  // Use the configured port (8000) for FastAPI

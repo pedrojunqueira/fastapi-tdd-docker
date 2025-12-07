@@ -16,6 +16,9 @@
     },
     "apiClientId": {
       "value": "${AZURE_API_CLIENT_ID}"
+    },
+    "openApiClientId": {
+      "value": "${AZURE_CLIENT_ID}"
     }
   }
 }
