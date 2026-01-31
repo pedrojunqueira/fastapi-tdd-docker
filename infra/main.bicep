@@ -17,14 +17,17 @@ param appName string = 'fastapi-tdd-docker'
 param resourceGroupName string = ''
 
 // Azure AD Configuration
+@minLength(1)
 @description('Azure AD Tenant ID')
-param azureTenantId string = ''
+param azureTenantId string
 
+@minLength(1)
 @description('Azure AD API Client ID (backend)')
-param apiClientId string = ''
+param apiClientId string
 
+@minLength(1)
 @description('Azure AD Frontend Client ID (for OpenAPI/Swagger)')
-param openApiClientId string = ''
+param openApiClientId string
 
 var abbrs = loadJsonContent('./abbreviations.json')
 var resourceToken = toLower(uniqueString(subscription().id, environmentName, location))

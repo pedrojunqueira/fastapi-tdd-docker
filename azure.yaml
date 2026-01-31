@@ -23,6 +23,30 @@ services:
         - VITE_REDIRECT_URI=${FRONTEND_URI}
         - VITE_API_BASE_URL=${WEB_URI}
 hooks:
+  preprovision:
+    shell: sh
+    run: |
+      echo "Validating required environment variables..."
+      missing_vars=""
+      if [ -z "$AZURE_TENANT_ID" ]; then
+        missing_vars="$missing_vars AZURE_TENANT_ID"
+      fi
+      if [ -z "$AZURE_API_CLIENT_ID" ]; then
+        missing_vars="$missing_vars AZURE_API_CLIENT_ID"
+      fi
+      if [ -z "$AZURE_CLIENT_ID" ]; then
+        missing_vars="$missing_vars AZURE_CLIENT_ID"
+      fi
+      if [ -n "$missing_vars" ]; then
+        echo "ERROR: The following required environment variables are not set:$missing_vars"
+        echo ""
+        echo "Please set them using:"
+        for var in $missing_vars; do
+          echo "  azd env set $var <value>"
+        done
+        exit 1
+      fi
+      echo "All required environment variables are set."
   postprovision:
     shell: sh
     run: |

@@ -71,6 +71,9 @@ azd env select dev
 azd env set AZURE_CLIENT_ID "<frontend-spa-client-id>"
 azd env set AZURE_TENANT_ID "<your-tenant-id>"
 azd env set AZURE_API_CLIENT_ID "<backend-api-client-id>"
+
+# View all environment variables
+azd env get-values
 ```
 
 ### Step 2: Deploy
