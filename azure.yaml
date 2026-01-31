@@ -51,21 +51,28 @@ hooks:
     shell: sh
     run: |
       echo "Infrastructure provisioned successfully"
+
+      # Skip frontend redeploy in CI - the workflow handles it separately
+      if [ -n "$CI" ] || [ -n "$GITHUB_ACTIONS" ]; then
+        echo "Running in CI - skipping frontend redeploy (handled by workflow)"
+        exit 0
+      fi
+
       echo "FRONTEND_URI: $FRONTEND_URI"
       echo "WEB_URI: $WEB_URI"
 
       # Ensure URIs are available before redeploying frontend
       if [ -z "$FRONTEND_URI" ] || [ -z "$WEB_URI" ]; then
         echo "WARNING: FRONTEND_URI or WEB_URI not set. Fetching from azd outputs..."
-        export FRONTEND_URI=$(azd show --output json | jq -r '.services.frontend.endpoint // empty')
-        export WEB_URI=$(azd show --output json | jq -r '.services.web.endpoint // empty')
+        export FRONTEND_URI=$(azd env get-value FRONTEND_URI 2>/dev/null || azd show --output json | jq -r '.services.frontend.endpoint // empty')
+        export WEB_URI=$(azd env get-value WEB_URI 2>/dev/null || azd show --output json | jq -r '.services.web.endpoint // empty')
         
         # Also save to azd env for future deploys
-        azd env set FRONTEND_URI "$FRONTEND_URI"
-        azd env set WEB_URI "$WEB_URI"
+        if [ -n "$FRONTEND_URI" ]; then azd env set FRONTEND_URI "$FRONTEND_URI"; fi
+        if [ -n "$WEB_URI" ]; then azd env set WEB_URI "$WEB_URI"; fi
         
-        echo "Fetched and saved FRONTEND_URI: $FRONTEND_URI"
-        echo "Fetched and saved WEB_URI: $WEB_URI"
+        echo "Fetched FRONTEND_URI: $FRONTEND_URI"
+        echo "Fetched WEB_URI: $WEB_URI"
       fi
 
       if [ -n "$FRONTEND_URI" ] && [ -n "$WEB_URI" ]; then

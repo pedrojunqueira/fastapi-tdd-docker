@@ -232,7 +232,26 @@ jobs:
           azd env set AZURE_TENANT_ID "$AZURE_AD_TENANT_ID"
           azd env set AZURE_API_CLIENT_ID "$AZURE_AD_API_CLIENT_ID"
 
-          azd up --no-prompt
+          # Step 1: Provision infrastructure (this outputs FRONTEND_URI and WEB_URI)
+          azd provision --no-prompt
+
+          # Step 2: Get the URIs from Bicep outputs and save to env
+          echo "Fetching deployment URIs..."
+          azd env refresh
+
+          # Get URIs from azd env (populated by Bicep outputs)
+          FRONTEND_URI=$(azd env get-value FRONTEND_URI 2>/dev/null || echo "")
+          WEB_URI=$(azd env get-value WEB_URI 2>/dev/null || echo "")
+
+          echo "FRONTEND_URI: $FRONTEND_URI"
+          echo "WEB_URI: $WEB_URI"
+
+          # Step 3: Deploy backend first
+          azd deploy web --no-prompt
+
+          # Step 4: Deploy frontend with correct URIs
+          export FRONTEND_URI WEB_URI
+          azd deploy frontend --no-prompt
         env:
           # Service Principal credentials (for azd auth)
           SP_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
