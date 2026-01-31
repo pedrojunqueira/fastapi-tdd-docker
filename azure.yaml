@@ -51,8 +51,25 @@ hooks:
     shell: sh
     run: |
       echo "Infrastructure provisioned successfully"
-      echo "Redeploying frontend with updated URLs..."
-      azd deploy frontend --no-prompt
+      echo "FRONTEND_URI: $FRONTEND_URI"
+      echo "WEB_URI: $WEB_URI"
+
+      # Ensure URIs are available before redeploying frontend
+      if [ -z "$FRONTEND_URI" ] || [ -z "$WEB_URI" ]; then
+        echo "WARNING: FRONTEND_URI or WEB_URI not set. Fetching from azd outputs..."
+        FRONTEND_URI=$(azd show --output json | jq -r '.services.frontend.endpoint // empty')
+        WEB_URI=$(azd show --output json | jq -r '.services.web.endpoint // empty')
+        echo "Fetched FRONTEND_URI: $FRONTEND_URI"
+        echo "Fetched WEB_URI: $WEB_URI"
+      fi
+
+      if [ -n "$FRONTEND_URI" ] && [ -n "$WEB_URI" ]; then
+        echo "Redeploying frontend with updated URLs..."
+        azd deploy frontend --no-prompt
+      else
+        echo "ERROR: Could not determine FRONTEND_URI or WEB_URI. Skipping frontend redeploy."
+        exit 1
+      fi
   predeploy:
     shell: sh
     run: |
