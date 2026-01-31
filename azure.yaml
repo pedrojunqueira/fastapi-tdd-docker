@@ -57,15 +57,20 @@ hooks:
       # Ensure URIs are available before redeploying frontend
       if [ -z "$FRONTEND_URI" ] || [ -z "$WEB_URI" ]; then
         echo "WARNING: FRONTEND_URI or WEB_URI not set. Fetching from azd outputs..."
-        FRONTEND_URI=$(azd show --output json | jq -r '.services.frontend.endpoint // empty')
-        WEB_URI=$(azd show --output json | jq -r '.services.web.endpoint // empty')
-        echo "Fetched FRONTEND_URI: $FRONTEND_URI"
-        echo "Fetched WEB_URI: $WEB_URI"
+        export FRONTEND_URI=$(azd show --output json | jq -r '.services.frontend.endpoint // empty')
+        export WEB_URI=$(azd show --output json | jq -r '.services.web.endpoint // empty')
+        
+        # Also save to azd env for future deploys
+        azd env set FRONTEND_URI "$FRONTEND_URI"
+        azd env set WEB_URI "$WEB_URI"
+        
+        echo "Fetched and saved FRONTEND_URI: $FRONTEND_URI"
+        echo "Fetched and saved WEB_URI: $WEB_URI"
       fi
 
       if [ -n "$FRONTEND_URI" ] && [ -n "$WEB_URI" ]; then
         echo "Redeploying frontend with updated URLs..."
-        azd deploy frontend --no-prompt
+        FRONTEND_URI="$FRONTEND_URI" WEB_URI="$WEB_URI" azd deploy frontend --no-prompt
       else
         echo "ERROR: Could not determine FRONTEND_URI or WEB_URI. Skipping frontend redeploy."
         exit 1
