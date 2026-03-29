@@ -1,4 +1,4 @@
-FROM python:3.13.3-slim-bookworm
+FROM python:3.14.0-slim-bookworm
 
 # Install uv from the official image
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
